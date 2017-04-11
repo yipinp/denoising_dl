@@ -15,6 +15,16 @@ including:
       (7) generate patch sets based on (patch size, stride, number)
       
 """
+# -*- coding: utf-8 -*- 
+import os
+import os.path
+
 
 def scan_image_directories(directory_path):
-    
+    for root,dirs,files in os.walk(directory_path):
+        for filename in files:
+            print(os.path.join(root,filename))
+
+
+training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets'            
+scan_image_directories(training_set_dir)
