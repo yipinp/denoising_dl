@@ -22,9 +22,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 import random
 import tensorflow as tf
-from tflearn.layers.core import input_data,dropout,fully_connected
-from tflearn.layers.conv import conv2d,max_pool_2d
-from tflearn.layers.normalization import local_response_normalization
+#from tflearn.layers.core import input_data,dropout,fully_connected
+#from tflearn.layers.conv import conv2d,max_pool_2d
+#from tflearn.layers.normalization import local_response_normalization
 
 
 """
@@ -108,7 +108,7 @@ def image_normalization(imgIn):
     return img_norm
     
 #horizontal scan first then vertical,output array is [patch_height,patch_width,channel,number]    
-def next_batches(result,batch_num):
+def next_batch(result,batch_num):
     global patch_current_x
     global patch_current_y
     global current_file_id
@@ -207,14 +207,7 @@ def multilayer_perceptron(x, weights, biases):
     # Output layer with linear activation
     out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
     return out_layer
-    
-
-
-    
-    
-    
-    
-    
+       
 """
         User defined parameter
 """    
@@ -272,18 +265,19 @@ n_hidden_1 = 256 # 1st layer number of features
 n_hidden_2 = 256 # 2nd layer number of features
 n_input = 784 # MNIST data input (img shape: 28*28)
 n_output = 784 # denoised patch size (img shape: 28*28)
-
+n_ch = 1
+num_examples = 1000
 
 # Store layers weight & bias
 weights = {
-    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
-    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_hidden_2, n_output]))
+    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1,n_ch])),
+    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2,n_ch])),
+    'out': tf.Variable(tf.random_normal([n_hidden_2, n_output,n_ch]))
 }
 biases = {
-    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_output]))
+    'b1': tf.Variable(tf.random_normal([n_hidden_1,n_ch])),
+    'b2': tf.Variable(tf.random_normal([n_hidden_2,n_ch])),
+    'out': tf.Variable(tf.random_normal([n_output,n_ch]))
 }
 
 # tf Graph input
@@ -299,7 +293,7 @@ pred = multilayer_perceptron(x, weights, biases)
 
 
 # Define loss and optimizer
-cost = (pred-y).dot(pred-y)
+cost = tf.matmul(pred-y,tf.transpose(pred-y))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
 # Initializing the variables
@@ -311,10 +305,11 @@ with tf.Session() as sess:
     # Training cycle
     for epoch in range(training_epochs):
         avg_cost = 0.
-        total_batch = int(mnist.train.num_examples/batch_size)
+        current_file_id = 0 # reset patch read index
+        total_batch = int(num_examples/batch_size)
         # Loop over all batches
         for i in range(total_batch):
-            batch_x, batch_y = mnist.train.next_batch(batch_size)
+            batch_x, batch_y = next_batch(result,batch_size)
             # Run optimization op (backprop) and cost op (to get loss value)
             _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
                                                           y: batch_y})
