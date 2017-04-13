@@ -21,6 +21,11 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 import random
+import tensorflow as tf
+from tflearn.layers.core import input_data,dropout,fully_connected
+from tflearn.layers.conv import conv2d,max_pool_2d
+from tflearn.layers.normalization import local_response_normalization
+
 
 """
     Scan one directory and find all files in the directory. return file list
@@ -103,12 +108,14 @@ def image_normalization(imgIn):
     return img_norm
     
 #horizontal scan first then vertical,output array is [patch_height,patch_width,channel,number]    
-def get_next_patches(result,batch_num):
+def next_batches(result,batch_num):
     global patch_current_x
     global patch_current_y
     global current_file_id
     global current_image
+    global current_image_true
     image = current_image
+    image_true = current_image_true
     patch_height = patch_size[0]
     patch_width  = patch_size[1]
     num = batch_num
@@ -117,19 +124,22 @@ def get_next_patches(result,batch_num):
     current_y = patch_current_y
     print(current_x,current_y)
     if current_x == 0 and current_y == 0 and current_file_id < len(result):
-        image = get_one_image(result[current_file_id]) 
+        image,image_true = get_one_image(result[current_file_id]) 
         current_image = image
+        current_image_true = image_true
         current_file_id = current_file_id + 1
         
     if current_file_id >= len(result):
         return None
         
     c = np.zeros((patch_height,patch_width,image.shape[2],num),dtype="float32")
+    c_true = np.zeros((patch_height,patch_width,image.shape[2],num),dtype="float32")
     for i in range(num):
         a = image[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1]),:]
+        b = image_true[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1]),:]
         #Fill 0 when out of picture
         c[:a.shape[0],:a.shape[1],:a.shape[2],i] = a
-
+        c_true[:a.shape[0],:a.shape[1],:a.shape[2],i] = b
         #update next patch coordination
         if current_x+patch_width >= image.shape[1]:
             current_x = 0
@@ -143,7 +153,7 @@ def get_next_patches(result,batch_num):
         
     patch_current_x = current_x
     patch_current_y = current_y  
-    return c[:,:,:,0:i+1]
+    return c[:,:,:,0:i+1],c_true[:,:,:,0:i+1]
 
 
 
@@ -153,17 +163,24 @@ def get_next_patches(result,batch_num):
 def get_one_image(filename):
     dst_size = image_size
     img_origin = cv2.imread(filename)
-    img = cv2.resize(img_origin,dst_size,interpolation=cv2.INTER_CUBIC)
-    rows,cols,ch = img.shape
+    img_true = cv2.resize(img_origin,dst_size,interpolation=cv2.INTER_CUBIC)
+    rows,cols,ch = img_true.shape
     M = cv2.getRotationMatrix2D((cols/2.0,rows/2.0),theta,1.0)
-    img = cv2.warpAffine(img,M,(rows,cols))
+    img_true = cv2.warpAffine(img_true,M,(rows,cols))
+    
+    if flip_mode != None :
+        img_true = cv2.flip(img_true,flip_mode)    
+    
     if noise_model == 1:
-        img = GaussianWhiteNoiseForRGB(img,dst_size,noise_mean,noise_sigma)
+        img = GaussianWhiteNoiseForRGB(img_true,dst_size,noise_mean,noise_sigma)
     elif noise_model == 2:
-        img = saltAndPepperForRGB(img,0)
+        img = saltAndPepperForRGB(img_true,0)
+    else :
+        img = img_true
     
     img = image_normalization(img)
-    return img
+    img_true = image_normalization(img_true)
+    return img,img_true
     
     
     #"""
@@ -173,6 +190,30 @@ def get_one_image(filename):
     print(img_origin.shape)
     #"""
 
+    
+    
+"""    
+   ---------------------------------------------------------------------------
+                 Basic layers & MLP & AlexNet 
+"""
+# Create model
+def multilayer_perceptron(x, weights, biases):
+    # Hidden layer with RELU activation
+    layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
+    layer_1 = tf.nn.relu(layer_1)
+    # Hidden layer with RELU activation
+    layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
+    layer_2 = tf.nn.relu(layer_2)
+    # Output layer with linear activation
+    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
+    return out_layer
+    
+
+
+    
+    
+    
+    
     
 """
         User defined parameter
@@ -184,6 +225,12 @@ mini_batch_num = 10
 
 # image anti-clockwise rotation angle in preprocess phase  
 theta = 0
+
+#flip 
+flip_mode = None  # None : None, 0 : vertical flip , positive : horizontal flip, negative: horizontal and vertical
+ 
+
+
 #add noise model in preprocess phase 
 noise_model = 0  #0 : NONE, 1: Gaussian 2: salt and pepper noise
 noise_mean = 0.0
@@ -191,8 +238,8 @@ noise_sigma  = 0.0
 salt_percent = 0.0
 
 #patch parameters
-patch_size = (5,5)
-patch_stride = 220
+patch_size = (28,28)
+patch_stride = 14
 
 #image scan directory setting
 training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets' 
@@ -208,11 +255,80 @@ seed = 0    #fixed order with fixed seed
 patch_current_x = 0
 patch_current_y = 0
 current_image = None
+current_image_true = None
 
+
+"""
+ ---------------------------------------------------------
+                  MLP control parameters
+"""
+learning_rate = 0.001
+training_epochs = 15
+batch_size = 100
+display_step = 1
+
+# Network Parameters
+n_hidden_1 = 256 # 1st layer number of features
+n_hidden_2 = 256 # 2nd layer number of features
+n_input = 784 # MNIST data input (img shape: 28*28)
+n_output = 784 # denoised patch size (img shape: 28*28)
+
+
+# Store layers weight & bias
+weights = {
+    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
+    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
+    'out': tf.Variable(tf.random_normal([n_hidden_2, n_output]))
+}
+biases = {
+    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+    'out': tf.Variable(tf.random_normal([n_output]))
+}
+
+# tf Graph input
+x = tf.placeholder("float", [None, n_input])
+y = tf.placeholder("float", [None, n_output])
 
 #test program         
 result = scan_image_directories(training_set_dir)
 result = random_image_list(result,seed)
-for i in range(10):
-    get_next_patches(result,mini_batch_num)
+
+# Construct model
+pred = multilayer_perceptron(x, weights, biases)
+
+
+# Define loss and optimizer
+cost = (pred-y).dot(pred-y)
+optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+
+# Initializing the variables
+init = tf.global_variables_initializer()
+
+# Launch the graph
+with tf.Session() as sess:
+    sess.run(init)
+    # Training cycle
+    for epoch in range(training_epochs):
+        avg_cost = 0.
+        total_batch = int(mnist.train.num_examples/batch_size)
+        # Loop over all batches
+        for i in range(total_batch):
+            batch_x, batch_y = mnist.train.next_batch(batch_size)
+            # Run optimization op (backprop) and cost op (to get loss value)
+            _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
+                                                          y: batch_y})
+            # Compute average loss
+            avg_cost += c / total_batch
+        # Display logs per epoch step
+        if epoch % display_step == 0:
+            print("Epoch:", '%04d' % (epoch+1), "cost=", \
+                "{:.9f}".format(avg_cost))
+    print("Optimization Finished!")
+
+
+
+
+
+
 
