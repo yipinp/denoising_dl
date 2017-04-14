@@ -96,7 +96,52 @@ def saltAndPepperForRGB(img,percetage):
                 
         return img
         
-        
+    
+def GaussianWhiteNoiseForGray(imgIn,dst_size,mean,sigma):
+    img = imgIn
+    gray = 255
+    zu = []
+    zv = []
+    for i in range(0,dst_size[0]):
+        for j in range(0,dst_size[1],2):
+            r1 = np.random.random_sample()
+            r2 = np.random.random_sample()
+            z1 = mean + sigma*np.cos(2*np.pi*r2)*np.sqrt((-2)*np.log(r1))
+            z2 = mean + sigma*np.sin(2*np.pi*r2)*np.sqrt((-2)*np.log(r1))
+            zu.append(z1)
+            zv.append(z2)
+            img[i,j] = np.clip(int(img[i,j] + z1),0,gray)
+            img[i,j+1] = np.clip(int(img[i,j+1] + z2),0,gray)
+            """
+            img[i,j,1] = np.clip(int(img[i,j] + z1),0,gray)
+            img[i,j+1,1] = np.clip(int(img[i,j+1] + z2),0,gray)
+            img[i,j,2] = np.clip(int(img[i,j] + z1),0,gray)
+            img[i,j+1,2] = np.clip(int(img[i,j+1] + z2),0,gray) 
+            """
+    return img
+    
+    
+def saltAndPepperForRGB(img,percetage):
+        percetage = salt_percent 
+        dst_size = image_size
+        width = dst_size[1]
+        height = dst_size[0]
+        NoiseNum = int(width*height*percetage)
+        for i in range(NoiseNum):
+            randx    = np.random.randint(0,width-1)
+            randy    = np.random.randint(0,height-1)
+            #print img.shape,randx,randy
+            if np.random.randint(0,1):
+                img[randy,randx,0] =  0
+                img[randy,randx,1] =  0
+                img[randy,randx,2] =  0
+            else :
+                img[randy,randx,0] =  255
+                img[randy,randx,1] =  255
+                img[randy,randx,2] =  255
+                
+        return img       
+
         
 """
     read image to numpy matrix and Normalization range to [0,1],
@@ -132,14 +177,14 @@ def next_batch(result,batch_num):
     if current_file_id >= len(result):
         return None
         
-    c = np.zeros((patch_height,patch_width,image.shape[2],num),dtype="float32")
-    c_true = np.zeros((patch_height,patch_width,image.shape[2],num),dtype="float32")
+    c = np.zeros((num,patch_height,patch_width),dtype="float32")
+    c_true = np.zeros((num,patch_height,patch_width),dtype="float32")
     for i in range(num):
-        a = image[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1]),:]
-        b = image_true[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1]),:]
+        a = image[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1])]
+        b = image_true[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1])]
         #Fill 0 when out of picture
-        c[:a.shape[0],:a.shape[1],:a.shape[2],i] = a
-        c_true[:a.shape[0],:a.shape[1],:a.shape[2],i] = b
+        c[i,:a.shape[0],:a.shape[1]] = a
+        c_true[i,:a.shape[0],:a.shape[1]] = b
         #update next patch coordination
         if current_x+patch_width >= image.shape[1]:
             current_x = 0
@@ -153,7 +198,7 @@ def next_batch(result,batch_num):
         
     patch_current_x = current_x
     patch_current_y = current_y  
-    return c[:,:,:,0:i+1],c_true[:,:,:,0:i+1]
+    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1))
 
 
 
@@ -163,8 +208,13 @@ def next_batch(result,batch_num):
 def get_one_image(filename):
     dst_size = image_size
     img_origin = cv2.imread(filename)
+    global channel
+    #convert to gray image
+    if channel == 1:
+        img_origin = cv2.cvtColor(img_origin,cv2.COLOR_BGR2GRAY)
     img_true = cv2.resize(img_origin,dst_size,interpolation=cv2.INTER_CUBIC)
-    rows,cols,ch = img_true.shape
+    print(img_true.shape)
+    rows,cols = img_true.shape
     M = cv2.getRotationMatrix2D((cols/2.0,rows/2.0),theta,1.0)
     img_true = cv2.warpAffine(img_true,M,(rows,cols))
     
@@ -172,7 +222,7 @@ def get_one_image(filename):
         img_true = cv2.flip(img_true,flip_mode)    
     
     if noise_model == 1:
-        img = GaussianWhiteNoiseForRGB(img_true,dst_size,noise_mean,noise_sigma)
+        img = GaussianWhiteNoiseForGray(img_true,dst_size,noise_mean,noise_sigma)
     elif noise_model == 2:
         img = saltAndPepperForRGB(img_true,0)
     else :
@@ -199,6 +249,7 @@ def get_one_image(filename):
 # Create model
 def multilayer_perceptron(x, weights, biases):
     # Hidden layer with RELU activation
+    print(x.shape)
     layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
     layer_1 = tf.nn.relu(layer_1)
     # Hidden layer with RELU activation
@@ -225,9 +276,9 @@ flip_mode = None  # None : None, 0 : vertical flip , positive : horizontal flip,
 
 
 #add noise model in preprocess phase 
-noise_model = 0  #0 : NONE, 1: Gaussian 2: salt and pepper noise
+noise_model = 1  #0 : NONE, 1: Gaussian 2: salt and pepper noise
 noise_mean = 0.0
-noise_sigma  = 0.0
+noise_sigma  = 20.0
 salt_percent = 0.0
 
 #patch parameters
@@ -265,19 +316,19 @@ n_hidden_1 = 256 # 1st layer number of features
 n_hidden_2 = 256 # 2nd layer number of features
 n_input = 784 # MNIST data input (img shape: 28*28)
 n_output = 784 # denoised patch size (img shape: 28*28)
-n_ch = 1
-num_examples = 1000
+num_examples = 50000
+channel = 1
 
 # Store layers weight & bias
 weights = {
-    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1,n_ch])),
-    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2,n_ch])),
-    'out': tf.Variable(tf.random_normal([n_hidden_2, n_output,n_ch]))
+    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
+    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
+    'out': tf.Variable(tf.random_normal([n_hidden_2, n_output]))
 }
 biases = {
-    'b1': tf.Variable(tf.random_normal([n_hidden_1,n_ch])),
-    'b2': tf.Variable(tf.random_normal([n_hidden_2,n_ch])),
-    'out': tf.Variable(tf.random_normal([n_output,n_ch]))
+    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+    'out': tf.Variable(tf.random_normal([n_output]))
 }
 
 # tf Graph input
@@ -291,9 +342,8 @@ result = random_image_list(result,seed)
 # Construct model
 pred = multilayer_perceptron(x, weights, biases)
 
-
 # Define loss and optimizer
-cost = tf.matmul(pred-y,tf.transpose(pred-y))
+cost = tf.reduce_mean(tf.matmul(pred-y,tf.transpose(pred-y)))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
 # Initializing the variables
@@ -313,6 +363,7 @@ with tf.Session() as sess:
             # Run optimization op (backprop) and cost op (to get loss value)
             _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
                                                           y: batch_y})
+            print("c:",c)
             # Compute average loss
             avg_cost += c / total_batch
         # Display logs per epoch step
