@@ -34,7 +34,7 @@ def scan_image_directories(directory_path):
     result = []
     for root,dirs,files in os.walk(directory_path):
         for filename in files:
-            #print(os.path.join(root,filename))
+            print(os.path.join(root,filename))
             result.append(os.path.join(root,filename))
     return result
     
@@ -198,6 +198,7 @@ def next_batch(result,batch_num):
         
     patch_current_x = current_x
     patch_current_y = current_y  
+    print("get batch number:",i)
     return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1))
 
 
@@ -240,7 +241,29 @@ def get_one_image(filename):
     print(img_origin.shape)
     #"""
 
-    
+#Horizontal patch scan   
+def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_stride,patches):
+    print(patches.shape)
+    frame_width_in_patch = (frame_width + patch_width - 1)//patch_width
+    frame_height_in_patch = (frame_height + patch_height - 1)//patch_height
+    frame = np.ones((frame_height_in_patch*patch_height,frame_width_in_patch*patch_width)) * -1 
+    for i in range(frame_height_in_patch):
+        for j in range(frame_width_in_patch):
+            patch_x = j * patch_stride
+            patch_y = i * patch_stride
+            print(patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride)
+            patch = patches[i*frame_width_in_patch+j,:]
+            print("patch:",patch.shape,patch[0],frame[patch_y][patch_x])
+            if frame[patch_y][patch_x] < 0:  #the first patch
+                frame[patch_y:patch_y+patch_height,patch_x:patch_x+patch_width] = patch.reshape(patch_height,patch_width)
+            else :
+                tf.add(frame[patch_y:patch_y+patch_height,patch_x:patch_x+patch_width],patch.reshape(patch_height,patch_width))
+                frame[patch_y:patch_y+patch_height,patch_x:patch_x+patch_width]/=2.0;
+            
+        
+    return frame
+   
+   
     
 """    
    ---------------------------------------------------------------------------
@@ -249,7 +272,6 @@ def get_one_image(filename):
 # Create model
 def multilayer_perceptron(x, weights, biases):
     # Hidden layer with RELU activation
-    print(x.shape)
     layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
     layer_1 = tf.nn.relu(layer_1)
     # Hidden layer with RELU activation
@@ -286,7 +308,7 @@ patch_size = (28,28)
 patch_stride = 14
 
 #image scan directory setting
-training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets' 
+training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
 current_file_id = 0
 
 #random training sets
@@ -347,8 +369,8 @@ cost = tf.reduce_mean(tf.matmul(pred-y,tf.transpose(pred-y)))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
 # Initializing the variables
-init = tf.global_variables_initializer()
-
+#init = tf.global_variables_initializer()
+init = tf.initialize_all_variables()
 # Launch the graph
 with tf.Session() as sess:
     sess.run(init)
@@ -363,7 +385,7 @@ with tf.Session() as sess:
             # Run optimization op (backprop) and cost op (to get loss value)
             _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
                                                           y: batch_y})
-            print("c:",c)
+            image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
             # Compute average loss
             avg_cost += c / total_batch
         # Display logs per epoch step
