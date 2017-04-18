@@ -175,7 +175,7 @@ def next_batch(result,batch_num):
         current_file_id = current_file_id + 1
         
     if current_file_id >= len(result):
-        return None
+        return None,None
         
     c = np.zeros((num,patch_height,patch_width),dtype="float32")
     c_true = np.zeros((num,patch_height,patch_width),dtype="float32")
@@ -193,15 +193,37 @@ def next_batch(result,batch_num):
             current_x += stride
             
         if current_y + patch_height >= image.shape[0]:
-            current_y = image.shape[0] + 1 
+            #current_y = image.shape[0] + 1 
+            current_x = 0
+            current_y = 0
             break
         
     patch_current_x = current_x
     patch_current_y = current_y  
-    print("get batch number:",i)
+    #print("get batch number:",i,num,current_file_id,len(result),patch_current_x,patch_current_y,image.shape)
     return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1))
 
 
+def get_patches_one_image(image_name):
+    patch_height = patch_size[0]
+    patch_width  = patch_size[1]
+    stride = patch_stride
+    image,image_true = get_one_image(image_name)
+    height_in_patch = (image.shape[0] + patch_height - 1)/patch_height
+    width_in_patch = (image.shape[1] + patch_width - 1)/patch_width
+    num = height_in_patch*  width_in_patch               
+    c = np.zeros((num,patch_height,patch_width),dtype="float32")
+    current_x = 0
+    current_y = 0
+    for i in range(num):
+        a = image[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1])]    
+        c[i,:a.shape[0],:a.shape[1]] = a
+        if current_x+patch_width >= image.shape[1]:
+            current_x = 0
+            current_y += stride
+        else:
+            current_x += stride
+    return np.reshape(c[0:i+1,:,:],(i+1,-1))
 
 """
     convert image to fixed size, and do 3x3 matrix multiple
@@ -214,7 +236,6 @@ def get_one_image(filename):
     if channel == 1:
         img_origin = cv2.cvtColor(img_origin,cv2.COLOR_BGR2GRAY)
     img_true = cv2.resize(img_origin,dst_size,interpolation=cv2.INTER_CUBIC)
-    print(img_true.shape)
     rows,cols = img_true.shape
     M = cv2.getRotationMatrix2D((cols/2.0,rows/2.0),theta,1.0)
     img_true = cv2.warpAffine(img_true,M,(rows,cols))
@@ -251,9 +272,10 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
         for j in range(frame_width_in_patch):
             patch_x = j * patch_stride
             patch_y = i * patch_stride
-            print(patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride)
+            #print("patch:",patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride,patches.shape,i*frame_width_in_patch+j)
+            if patches.shape[0] <= i*frame_width_in_patch+j:
+                break;
             patch = patches[i*frame_width_in_patch+j,:]
-            print("patch:",patch.shape,patch[0],frame[patch_y][patch_x])
             if frame[patch_y][patch_x] < 0:  #the first patch
                 frame[patch_y:patch_y+patch_height,patch_x:patch_x+patch_width] = patch.reshape(patch_height,patch_width)
             else :
@@ -308,7 +330,8 @@ patch_size = (28,28)
 patch_stride = 14
 
 #image scan directory setting
-training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
+#training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
+training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
 current_file_id = 0
 
 #random training sets
@@ -338,7 +361,7 @@ n_hidden_1 = 256 # 1st layer number of features
 n_hidden_2 = 256 # 2nd layer number of features
 n_input = 784 # MNIST data input (img shape: 28*28)
 n_output = 784 # denoised patch size (img shape: 28*28)
-num_examples = 50000
+num_examples = 500
 channel = 1
 
 # Store layers weight & bias
@@ -369,8 +392,8 @@ cost = tf.reduce_mean(tf.matmul(pred-y,tf.transpose(pred-y)))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
 # Initializing the variables
-#init = tf.global_variables_initializer()
-init = tf.initialize_all_variables()
+init = tf.global_variables_initializer()
+#init = tf.initialize_all_variables()
 # Launch the graph
 with tf.Session() as sess:
     sess.run(init)
@@ -382,6 +405,8 @@ with tf.Session() as sess:
         # Loop over all batches
         for i in range(total_batch):
             batch_x, batch_y = next_batch(result,batch_size)
+            if batch_y == None:
+                break
             # Run optimization op (backprop) and cost op (to get loss value)
             _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
                                                           y: batch_y})
@@ -395,8 +420,12 @@ with tf.Session() as sess:
     print("Optimization Finished!")
 
 
-
-
-
+    print("Start test phase for one image!")
+    test_image = result[0]
+    batch_x = get_patches_one_image(test_image)
+    patch_recover = sess.run(pred,{x:batch_x})
+    frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
+    plt.imshow(frame)
+    plt.show()
 
 
