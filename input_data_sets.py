@@ -167,7 +167,6 @@ def next_batch(result,batch_num):
     stride = patch_stride
     current_x = patch_current_x
     current_y = patch_current_y
-    print(current_x,current_y)
     if current_x == 0 and current_y == 0 and current_file_id < len(result):
         image,image_true = get_one_image(result[current_file_id]) 
         current_image = image
@@ -264,7 +263,6 @@ def get_one_image(filename):
 
 #Horizontal patch scan   
 def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_stride,patches):
-    print(patches.shape)
     frame_width_in_patch = (frame_width + patch_width - 1)//patch_width
     frame_height_in_patch = (frame_height + patch_height - 1)//patch_height
     frame = np.ones((frame_height_in_patch*patch_height,frame_width_in_patch*patch_width)) * -1 
