@@ -204,16 +204,18 @@ def next_batch(result,batch_num):
 
 
 def get_patches_one_image(image_name):
+    global patch_current_x
+    global patch_current_y
     patch_height = patch_size[0]
     patch_width  = patch_size[1]
     stride = patch_stride
     image,image_true = get_one_image(image_name)
-    height_in_patch = (image.shape[0] + patch_height - 1)/patch_height
-    width_in_patch = (image.shape[1] + patch_width - 1)/patch_width
-    num = height_in_patch*  width_in_patch               
+    height_in_patch = (image.shape[0] + patch_height - 1)//patch_height
+    width_in_patch = (image.shape[1] + patch_width - 1)//patch_width   
+    num = height_in_patch * width_in_patch                   
     c = np.zeros((num,patch_height,patch_width),dtype="float32")
-    current_x = 0
-    current_y = 0
+    current_x = patch_current_x
+    current_y = patch_current_y
     for i in range(num):
         a = image[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1])]    
         c[i,:a.shape[0],:a.shape[1]] = a
@@ -359,7 +361,7 @@ n_hidden_1 = 256 # 1st layer number of features
 n_hidden_2 = 256 # 2nd layer number of features
 n_input = 784 # MNIST data input (img shape: 28*28)
 n_output = 784 # denoised patch size (img shape: 28*28)
-num_examples = 500
+num_examples = 5000
 channel = 1
 
 # Store layers weight & bias
@@ -420,6 +422,9 @@ with tf.Session() as sess:
 
     print("Start test phase for one image!")
     test_image = result[0]
+    print("test image is:",test_image)
+    patch_current_y = 0
+    patch_current_x = 0
     batch_x = get_patches_one_image(test_image)
     patch_recover = sess.run(pred,{x:batch_x})
     frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
