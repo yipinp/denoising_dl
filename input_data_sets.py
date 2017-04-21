@@ -54,7 +54,7 @@ def random_image_list(filelist,seed):
         Add gaussian noise or salt peper noise
 """    
 def GaussianWhiteNoiseForRGB(imgIn,dst_size,mean,sigma):
-    img = imgIn
+    img = np.zeros(imgIn.shape)
     gray = 255
     zu = []
     zv = []
@@ -66,12 +66,12 @@ def GaussianWhiteNoiseForRGB(imgIn,dst_size,mean,sigma):
             z2 = mean + sigma*np.sin(2*np.pi*r2)*np.sqrt((-2)*np.log(r1))
             zu.append(z1)
             zv.append(z2)
-            img[i,j,0] = np.clip(int(img[i,j,0] + z1),0,gray)
-            img[i,j+1,0] = np.clip(int(img[i,j+1,0] + z2),0,gray)
-            img[i,j,1] = np.clip(int(img[i,j,1] + z1),0,gray)
-            img[i,j+1,1] = np.clip(int(img[i,j+1,1] + z2),0,gray)
-            img[i,j,2] = np.clip(int(img[i,j,2] + z1),0,gray)
-            img[i,j+1,2] = np.clip(int(img[i,j+1,2] + z2),0,gray)   
+            img[i,j,0] = np.clip(int(imgIn[i,j,0] + z1),0,gray)
+            img[i,j+1,0] = np.clip(int(imgIn[i,j+1,0] + z2),0,gray)
+            img[i,j,1] = np.clip(int(imgIn[i,j,1] + z1),0,gray)
+            img[i,j+1,1] = np.clip(int(imgIn[i,j+1,1] + z2),0,gray)
+            img[i,j,2] = np.clip(int(imgIn[i,j,2] + z1),0,gray)
+            img[i,j+1,2] = np.clip(int(imgIn[i,j+1,2] + z2),0,gray)   
     return img
     
     
@@ -98,7 +98,7 @@ def saltAndPepperForRGB(img,percetage):
         
     
 def GaussianWhiteNoiseForGray(imgIn,dst_size,mean,sigma):
-    img = imgIn
+    img = np.zeros(imgIn.shape)
     gray = 255
     zu = []
     zv = []
@@ -110,8 +110,8 @@ def GaussianWhiteNoiseForGray(imgIn,dst_size,mean,sigma):
             z2 = mean + sigma*np.sin(2*np.pi*r2)*np.sqrt((-2)*np.log(r1))
             zu.append(z1)
             zv.append(z2)
-            img[i,j] = np.clip(int(img[i,j] + z1),0,gray)
-            img[i,j+1] = np.clip(int(img[i,j+1] + z2),0,gray)
+            img[i,j] = np.clip(int(imgIn[i,j] + z1),0,gray)
+            img[i,j+1] = np.clip(int(imgIn[i,j+1] + z2),0,gray)
             """
             img[i,j,1] = np.clip(int(img[i,j] + z1),0,gray)
             img[i,j+1,1] = np.clip(int(img[i,j+1] + z2),0,gray)
@@ -149,7 +149,7 @@ def saltAndPepperForRGB(img,percetage):
 
 """
 def image_normalization(imgIn):
-    img_norm = imgIn/255.0;
+    img_norm = imgIn/256.0;
     return img_norm
     
 #horizontal scan first then vertical,output array is [patch_height,patch_width,channel,number]    
@@ -168,7 +168,7 @@ def next_batch(result,batch_num):
     current_x = patch_current_x
     current_y = patch_current_y
     if current_x == 0 and current_y == 0 and current_file_id < len(result):
-        image,image_true = get_one_image(result[current_file_id]) 
+        image,image_true,_ = get_one_image(result[current_file_id]) 
         current_image = image
         current_image_true = image_true
         current_file_id = current_file_id + 1
@@ -209,9 +209,9 @@ def get_patches_one_image(image_name):
     patch_height = patch_size[0]
     patch_width  = patch_size[1]
     stride = patch_stride
-    image,image_true = get_one_image(image_name)
-    height_in_patch = (image.shape[0] + patch_height - 1)//patch_height
-    width_in_patch = (image.shape[1] + patch_width - 1)//patch_width   
+    image,image_true,_ = get_one_image(image_name)
+    height_in_patch = (image.shape[0] + patch_stride - 1)//patch_stride
+    width_in_patch = (image.shape[1] + patch_stride - 1)//patch_stride   
     num = height_in_patch * width_in_patch                   
     c = np.zeros((num,patch_height,patch_width),dtype="float32")
     current_x = patch_current_x
@@ -252,8 +252,8 @@ def get_one_image(filename):
         img = img_true
     
     img = image_normalization(img)
-    img_true = image_normalization(img_true)
-    return img,img_true
+    img_true1 = image_normalization(img_true)
+    return img,img_true1,img_true
     
     
     #"""
@@ -263,24 +263,46 @@ def get_one_image(filename):
     print(img_origin.shape)
     #"""
 
+    
+def get_golden_image_show(filename):
+    dst_size = image_size
+    img_origin = cv2.imread(filename)
+    global channel
+    #convert to gray image
+    if channel == 1:
+        img_origin = cv2.cvtColor(img_origin,cv2.COLOR_BGR2GRAY)
+        
+    img_true = cv2.resize(img_origin,dst_size,interpolation=cv2.INTER_CUBIC)
+    rows,cols = img_true.shape
+    M = cv2.getRotationMatrix2D((cols/2.0,rows/2.0),theta,1.0)
+    img_true = cv2.warpAffine(img_true,M,(rows,cols))
+
+    if flip_mode != None :
+        img_true = cv2.flip(img_true,flip_mode)    
+    
+    return img_true
+    
 #Horizontal patch scan   
 def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_stride,patches):
-    frame_width_in_patch = (frame_width + patch_width - 1)//patch_width
-    frame_height_in_patch = (frame_height + patch_height - 1)//patch_height
+    frame_width_in_patch = (frame_width + patch_stride - 1)//patch_stride
+    frame_height_in_patch = (frame_height + patch_stride - 1)//patch_stride
     frame = np.ones((frame_height_in_patch*patch_height,frame_width_in_patch*patch_width)) * -1 
     for i in range(frame_height_in_patch):
         for j in range(frame_width_in_patch):
             patch_x = j * patch_stride
-            patch_y = i * patch_stride
+            patch_y = i * patch_stride        
             #print("patch:",patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride,patches.shape,i*frame_width_in_patch+j)
-            if patches.shape[0] <= i*frame_width_in_patch+j:
-                break;
             patch = patches[i*frame_width_in_patch+j,:]
-            if frame[patch_y][patch_x] < 0:  #the first patch
-                frame[patch_y:patch_y+patch_height,patch_x:patch_x+patch_width] = patch.reshape(patch_height,patch_width)
-            else :
-                tf.add(frame[patch_y:patch_y+patch_height,patch_x:patch_x+patch_width],patch.reshape(patch_height,patch_width))
-                frame[patch_y:patch_y+patch_height,patch_x:patch_x+patch_width]/=2.0;
+           # print("patch:",(patch_y,patch_x),patch)
+            for m in range(patch_height):
+                for n in range(patch_width):
+                    if frame[patch_y+m][patch_x+n] < 0:  #the first patch
+                        if (patch_y+m < frame_height) and (patch_x+n < frame_width) :
+                            frame[patch_y+m][patch_x+n] = patch[m*patch_width + n]
+                    else :
+                        if patch_y+m < frame_height and patch_x+n < frame_width :
+                            frame[patch_y+m][patch_x+n] += patch[m*patch_width + n]
+                            frame[patch_y+m][patch_x+n]/=2.0;
             
         
     return frame
@@ -300,7 +322,7 @@ def multilayer_perceptron(x, weights, biases):
     layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
     layer_2 = tf.nn.relu(layer_2)
     # Output layer with linear activation
-    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
+    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']                     
     return out_layer
        
 """
@@ -333,6 +355,8 @@ patch_stride = 14
 #training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
 training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
 current_file_id = 0
+model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
+img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
 
 #random training sets
 seed = 0    #fixed order with fixed seed 
@@ -351,9 +375,10 @@ current_image_true = None
  ---------------------------------------------------------
                   MLP control parameters
 """
-learning_rate = 0.001
-training_epochs = 15
-batch_size = 100
+learning_rate = 0.005
+training_epochs = 30
+batch_size = 500
+num_examples = 10000
 display_step = 1
 
 # Network Parameters
@@ -361,7 +386,6 @@ n_hidden_1 = 256 # 1st layer number of features
 n_hidden_2 = 256 # 2nd layer number of features
 n_input = 784 # MNIST data input (img shape: 28*28)
 n_output = 784 # denoised patch size (img shape: 28*28)
-num_examples = 5000
 channel = 1
 
 # Store layers weight & bias
@@ -388,12 +412,13 @@ result = random_image_list(result,seed)
 pred = multilayer_perceptron(x, weights, biases)
 
 # Define loss and optimizer
-cost = tf.reduce_mean(tf.matmul(pred-y,tf.transpose(pred-y)))
+cost = tf.nn.l2_loss(pred-y)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
 # Initializing the variables
 init = tf.global_variables_initializer()
 #init = tf.initialize_all_variables()
+saver = tf.train.Saver()
 # Launch the graph
 with tf.Session() as sess:
     sess.run(init)
@@ -405,12 +430,13 @@ with tf.Session() as sess:
         # Loop over all batches
         for i in range(total_batch):
             batch_x, batch_y = next_batch(result,batch_size)
+            
             if batch_y == None:
                 break
             # Run optimization op (backprop) and cost op (to get loss value)
             _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
                                                           y: batch_y})
-            image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
+            #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
             # Compute average loss
             avg_cost += c / total_batch
         # Display logs per epoch step
@@ -418,7 +444,7 @@ with tf.Session() as sess:
             print("Epoch:", '%04d' % (epoch+1), "cost=", \
                 "{:.9f}".format(avg_cost))
     print("Optimization Finished!")
-
+    
 
     print("Start test phase for one image!")
     test_image = result[0]
@@ -427,8 +453,15 @@ with tf.Session() as sess:
     patch_current_x = 0
     batch_x = get_patches_one_image(test_image)
     patch_recover = sess.run(pred,{x:batch_x})
+    print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
     frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
-    plt.imshow(frame)
-    plt.show()
+    save_path = saver.save(sess,model_path)
+    golden_image = get_golden_image_show(test_image)
+    plt.subplot(1,2,1)
+    plt.imshow(frame*256.0,cmap='gray')
+    cv2.imwrite(img_path,frame*256.0)
+    plt.subplot(1,2,2)
+    plt.imshow(golden_image,cmap='gray')
+
 
 
