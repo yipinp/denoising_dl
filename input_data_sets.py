@@ -167,14 +167,17 @@ def next_batch(result,batch_num):
     stride = patch_stride
     current_x = patch_current_x
     current_y = patch_current_y
+    
+    if current_file_id >= len(result):
+        current_file_id = 0   #reload training set if finished
+        print("All training set is finished, need to reset the training set now!")
+        
     if current_x == 0 and current_y == 0 and current_file_id < len(result):
         image,image_true,_ = get_one_image(result[current_file_id]) 
         current_image = image
         current_image_true = image_true
         current_file_id = current_file_id + 1
         
-    if current_file_id >= len(result):
-        return None,None
         
     c = np.zeros((num,patch_height,patch_width),dtype="float32")
     c_true = np.zeros((num,patch_height,patch_width),dtype="float32")
@@ -291,21 +294,23 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
         for j in range(frame_width_in_patch):
             patch_x = j * patch_stride
             patch_y = i * patch_stride        
-            #print("patch:",patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride,patches.shape,i*frame_width_in_patch+j)
+            print("patch:",patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride,patches.shape,i*frame_width_in_patch+j)
             patch = patches[i*frame_width_in_patch+j,:]
-           # print("patch:",(patch_y,patch_x),patch)
+
             for m in range(patch_height):
                 for n in range(patch_width):
+                    """
                     if frame[patch_y+m][patch_x+n] < 0:  #the first patch
                         if (patch_y+m < frame_height) and (patch_x+n < frame_width) :
                             frame[patch_y+m][patch_x+n] = patch[m*patch_width + n]
                     else :
-                        if patch_y+m < frame_height and patch_x+n < frame_width :
+                        if (patch_y+m < frame_height) and (patch_x+n < frame_width) :
                             frame[patch_y+m][patch_x+n] += patch[m*patch_width + n]
-                            frame[patch_y+m][patch_x+n]/=2.0;
-            
+                            frame[patch_y+m][patch_x+n] /=2.0;
+                    """
+                    frame[patch_y+m][patch_x+n] = patch[m*patch_width + n]
         
-    return frame
+    return frame[0:frame_height,0:frame_width]
    
    
     
@@ -352,12 +357,15 @@ patch_size = (28,28)
 patch_stride = 14
 
 #image scan directory setting
-#training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
-training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
+#training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
 current_file_id = 0
-model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
-img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
+#model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
+#img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
 
+
+training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
+img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
+model_path = r'/home/pyp/paper/denosing/denoising_dl/model.ckpt'
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -375,10 +383,10 @@ current_image_true = None
  ---------------------------------------------------------
                   MLP control parameters
 """
-learning_rate = 0.005
-training_epochs = 30
-batch_size = 500
-num_examples = 10000
+learning_rate = 0.001
+training_epochs = 1
+batch_size = 1
+num_examples = 1
 display_step = 1
 
 # Network Parameters
@@ -416,8 +424,8 @@ cost = tf.nn.l2_loss(pred-y)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
 # Initializing the variables
-init = tf.global_variables_initializer()
-#init = tf.initialize_all_variables()
+#init = tf.global_variables_initializer()
+init = tf.initialize_all_variables()
 saver = tf.train.Saver()
 # Launch the graph
 with tf.Session() as sess:
@@ -453,12 +461,12 @@ with tf.Session() as sess:
     patch_current_x = 0
     batch_x = get_patches_one_image(test_image)
     patch_recover = sess.run(pred,{x:batch_x})
-    print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
-    frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
+    #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
+    frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_x)
     save_path = saver.save(sess,model_path)
     golden_image = get_golden_image_show(test_image)
     plt.subplot(1,2,1)
-    plt.imshow(frame*256.0,cmap='gray')
+    plt.imshow(frame,cmap='gray')
     cv2.imwrite(img_path,frame*256.0)
     plt.subplot(1,2,2)
     plt.imshow(golden_image,cmap='gray')
