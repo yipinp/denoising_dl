@@ -331,8 +331,12 @@ def multilayer_perceptron(x, weights, biases):
     # Hidden layer with RELU activation
     layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
     layer_2 = tf.nn.relu(layer_2)
+    # Hidden layer with RELU activation
+    layer_3 = tf.add(tf.matmul(layer_2, weights['h3']), biases['b3'])
+    layer_3 = tf.nn.relu(layer_3)
+    
     # Output layer with linear activation
-    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']                     
+    out_layer = tf.matmul(layer_3, weights['out']) + biases['out']                     
     return out_layer
        
 """
@@ -341,7 +345,6 @@ def multilayer_perceptron(x, weights, biases):
     
 #global setting        
 image_size =(224,224)
-mini_batch_num = 10
 
 # image anti-clockwise rotation angle in preprocess phase  
 theta = 0
@@ -389,15 +392,16 @@ current_image_true = None
  ---------------------------------------------------------
                   MLP control parameters
 """
-learning_rate = 0.005
+learning_rate = 0.003
 training_epochs = 30
 batch_size = 1000
-num_examples = 10000
+num_examples = 100000
 display_step = 1
 
 # Network Parameters
-n_hidden_1 = 256 # 1st layer number of features
-n_hidden_2 = 256 # 2nd layer number of features
+n_hidden_1 = 512 # 1st layer number of features
+n_hidden_2 = 512 # 2nd layer number of features
+n_hidden_3 = 512 # 3nd layer number of features
 n_input = 784 # MNIST data input (img shape: 28*28)
 n_output = 784 # denoised patch size (img shape: 28*28)
 channel = 1
@@ -406,11 +410,13 @@ channel = 1
 weights = {
     'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
     'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_hidden_2, n_output]))
+    'h3': tf.Variable(tf.random_normal([n_hidden_2, n_hidden_3])),
+    'out': tf.Variable(tf.random_normal([n_hidden_3, n_output]))
 }
 biases = {
     'b1': tf.Variable(tf.random_normal([n_hidden_1])),
     'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+    'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
     'out': tf.Variable(tf.random_normal([n_output]))
 }
 
