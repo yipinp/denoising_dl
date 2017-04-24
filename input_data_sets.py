@@ -217,19 +217,21 @@ def get_patches_one_image(image_name):
     width_in_patch = (image.shape[1] + patch_stride - 1)//patch_stride   
     num = height_in_patch * width_in_patch                   
     c = np.zeros((num,patch_height,patch_width),dtype="float32")
+    c_true = np.zeros((num,patch_height,patch_width),dtype="float32")
     current_x = patch_current_x
     current_y = patch_current_y
    
     for i in range(num):
-        print("patch:",current_x,current_y,num,image.shape)
         a = image[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1])]    
         c[i,:a.shape[0],:a.shape[1]] = a
+        a_true = image_true[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1])]
+        c_true[i,:a_true.shape[0],:a_true.shape[1]] = a_true
         if current_x+patch_stride >= image.shape[1]:
             current_x = 0
             current_y += stride
         else:
             current_x += stride
-    return np.reshape(c[0:i+1,:,:],(i+1,-1))
+    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1))
 
 """
     convert image to fixed size, and do 3x3 matrix multiple
@@ -302,7 +304,7 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
 
             for m in range(patch_height):
                 for n in range(patch_width):
-                    """
+                    
                     if frame[patch_y+m][patch_x+n] < 0:  #the first patch
                         if (patch_y+m < frame_height) and (patch_x+n < frame_width) :
                             frame[patch_y+m][patch_x+n] = patch[m*patch_width + n]
@@ -310,8 +312,8 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
                         if (patch_y+m < frame_height) and (patch_x+n < frame_width) :
                             frame[patch_y+m][patch_x+n] += patch[m*patch_width + n]
                             frame[patch_y+m][patch_x+n] /=2.0;
-                    """
-                    frame[patch_y+m][patch_x+n] = patch[m*patch_width + n]
+                    
+             
     np.savetxt("frame.txt",frame[0:frame_height,0:frame_width],fmt="%f")    
     return frame[0:frame_height,0:frame_width]
    
@@ -360,7 +362,8 @@ patch_size = (28,28)
 patch_stride = 14
 
 #image scan directory setting
-training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
+training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\training_data_set'
+test_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
 current_file_id = 0
 model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
@@ -386,10 +389,10 @@ current_image_true = None
  ---------------------------------------------------------
                   MLP control parameters
 """
-learning_rate = 0.001
-training_epochs = 1
-batch_size = 1
-num_examples = 1
+learning_rate = 0.005
+training_epochs = 30
+batch_size = 1000
+num_examples = 10000
 display_step = 1
 
 # Network Parameters
@@ -418,6 +421,9 @@ y = tf.placeholder("float", [None, n_output])
 #test program         
 result = scan_image_directories(training_set_dir)
 result = random_image_list(result,seed)
+
+result_test = scan_image_directories(test_set_dir)
+result_test = random_image_list(result_test,seed)
 
 # Construct model
 pred = multilayer_perceptron(x, weights, biases)
@@ -458,14 +464,15 @@ with tf.Session() as sess:
     
 
     print("Start test phase for one image!")
-    test_image = result[0]
+    test_image = result_test[0]
     print("test image is:",test_image)
     patch_current_y = 0
     patch_current_x = 0
-    batch_x = get_patches_one_image(test_image)
-    patch_recover = sess.run(pred,{x:batch_x})
+    batch_x,batch_y = get_patches_one_image(test_image)
+    patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
+    print("Test phase: cost = ",cost_test)
     #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
-    frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_x)
+    frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
     save_path = saver.save(sess,model_path)
     golden_image = get_golden_image_show(test_image)
     plt.subplot(1,2,1)
