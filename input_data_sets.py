@@ -188,13 +188,13 @@ def next_batch(result,batch_num):
         c[i,:a.shape[0],:a.shape[1]] = a
         c_true[i,:a.shape[0],:a.shape[1]] = b
         #update next patch coordination
-        if current_x+patch_width >= image.shape[1]:
+        if current_x+stride >= image.shape[1]:
             current_x = 0
             current_y += stride
         else:
             current_x += stride
             
-        if current_y + patch_height >= image.shape[0]:
+        if current_y + stride >= image.shape[0]:
             #current_y = image.shape[0] + 1 
             current_x = 0
             current_y = 0
@@ -219,10 +219,12 @@ def get_patches_one_image(image_name):
     c = np.zeros((num,patch_height,patch_width),dtype="float32")
     current_x = patch_current_x
     current_y = patch_current_y
+   
     for i in range(num):
+        print("patch:",current_x,current_y,num,image.shape)
         a = image[current_y:min(current_y+patch_height,image.shape[0]),current_x:min(current_x+patch_width,image.shape[1])]    
         c[i,:a.shape[0],:a.shape[1]] = a
-        if current_x+patch_width >= image.shape[1]:
+        if current_x+patch_stride >= image.shape[1]:
             current_x = 0
             current_y += stride
         else:
@@ -294,8 +296,9 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
         for j in range(frame_width_in_patch):
             patch_x = j * patch_stride
             patch_y = i * patch_stride        
-            print("patch:",patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride,patches.shape,i*frame_width_in_patch+j)
+          #  print("patch:",patch_x,patch_y,i,j,frame_height_in_patch,frame_width_in_patch,patch_stride,patches.shape,i*frame_width_in_patch+j)
             patch = patches[i*frame_width_in_patch+j,:]
+            np.savetxt("patch.txt",patches,fmt="%f")
 
             for m in range(patch_height):
                 for n in range(patch_width):
@@ -309,7 +312,7 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
                             frame[patch_y+m][patch_x+n] /=2.0;
                     """
                     frame[patch_y+m][patch_x+n] = patch[m*patch_width + n]
-        
+    np.savetxt("frame.txt",frame[0:frame_height,0:frame_width],fmt="%f")    
     return frame[0:frame_height,0:frame_width]
    
    
@@ -357,15 +360,15 @@ patch_size = (28,28)
 patch_stride = 14
 
 #image scan directory setting
-#training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
+training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
 current_file_id = 0
-#model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
-#img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
+model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
+img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
 
 
-training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
-img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
-model_path = r'/home/pyp/paper/denosing/denoising_dl/model.ckpt'
+#training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
+#img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
+#model_path = r'/home/pyp/paper/denosing/denoising_dl/model.ckpt'
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
