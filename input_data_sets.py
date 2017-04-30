@@ -149,8 +149,14 @@ def saltAndPepperForRGB(img,percetage):
 
 """
 def image_normalization(imgIn):
-    img_norm = imgIn/256.0;
+    img_norm = (imgIn/255.0 - 0.5)*0.2;
     return img_norm
+    
+def image_renorm(frame):
+    frame = (frame*5.0 + 0.5)*255.0
+    frame = np.array(frame,dtype=int)
+    frame = frame.clip(0,255)
+    return frame
     
 #horizontal scan first then vertical,output array is [patch_height,patch_width,channel,number]    
 def next_batch(result,batch_num):
@@ -361,8 +367,8 @@ noise_sigma  = 20.0
 salt_percent = 0.0
 
 #patch parameters
-patch_size = (28,28)
-patch_stride = 14
+patch_size = (14,14)
+patch_stride = 7
 
 #image scan directory setting
 training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\training_data_set'
@@ -372,9 +378,10 @@ model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.c
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
 
 
-#training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/data' 
-#img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
-#model_path = r'/home/pyp/paper/denosing/denoising_dl/model.ckpt'
+training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
+test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
+img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
+model_path = r'/home/pyp/paper/denosing/denoising_dl/model.ckpt'
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -392,18 +399,21 @@ current_image_true = None
  ---------------------------------------------------------
                   MLP control parameters
 """
-learning_rate = 0.003
-training_epochs = 30
-batch_size = 1000
-num_examples = 100000
+learning_rate = 0.5
+learning_period = 5
+learning_ratio = 0.9
+training_epochs = 500
+batch_size = 500
+num_examples = 15000
 display_step = 1
 
 # Network Parameters
-n_hidden_1 = 512 # 1st layer number of features
-n_hidden_2 = 512 # 2nd layer number of features
-n_hidden_3 = 512 # 3nd layer number of features
-n_input = 784 # MNIST data input (img shape: 28*28)
-n_output = 784 # denoised patch size (img shape: 28*28)
+n_hidden_1 = 1024 # 1st layer number of features
+n_hidden_2 = 1024 # 2nd layer number of features
+n_hidden_3 = 1024 # 3nd layer number of features
+n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
+n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
+prev_cost = 0
 channel = 1
 
 # Store layers weight & bias
@@ -423,6 +433,7 @@ biases = {
 # tf Graph input
 x = tf.placeholder("float", [None, n_input])
 y = tf.placeholder("float", [None, n_output])
+lrate = tf.placeholder("float")
 
 #test program         
 result = scan_image_directories(training_set_dir)
@@ -436,8 +447,8 @@ pred = multilayer_perceptron(x, weights, biases)
 
 # Define loss and optimizer
 cost = tf.nn.l2_loss(pred-y)
-optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-
+optimizer = tf.train.AdamOptimizer(learning_rate=lrate).minimize(cost)
+#optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(cost)
 # Initializing the variables
 #init = tf.global_variables_initializer()
 init = tf.initialize_all_variables()
@@ -458,11 +469,21 @@ with tf.Session() as sess:
                 break
             # Run optimization op (backprop) and cost op (to get loss value)
             _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
-                                                          y: batch_y})
+                                                          y: batch_y,
+                                                          lrate:learning_rate})
             #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
             # Compute average loss
-            avg_cost += c / total_batch
+            avg_cost += c
         # Display logs per epoch step
+        if epoch % learning_period == 0:
+            prev_cost = avg_cost
+        if avg_cost > prev_cost*0.9  and epoch % learning_period == learning_period - 1:
+            if abs(prev_cost - avg_cost) < 1.0:
+                print("Early termination!",prev_cost,avg_cost)
+                break
+            learning_rate *= learning_ratio
+            print("Adjust learning rate to ",learning_rate)
+            
         if epoch % display_step == 0:
             print("Epoch:", '%04d' % (epoch+1), "cost=", \
                 "{:.9f}".format(avg_cost))
@@ -475,15 +496,17 @@ with tf.Session() as sess:
     patch_current_y = 0
     patch_current_x = 0
     batch_x,batch_y = get_patches_one_image(test_image)
-    patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
-    print("Test phase: cost = ",cost_test)
+    patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,lrate:learning_rate})
+    print("Test phase: cost = ", cost_test)
     #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
     frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
     save_path = saver.save(sess,model_path)
     golden_image = get_golden_image_show(test_image)
+    print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
     plt.subplot(1,2,1)
+    frame = image_renorm(frame)
     plt.imshow(frame,cmap='gray')
-    cv2.imwrite(img_path,frame*256.0)
+    cv2.imwrite(img_path,frame)
     plt.subplot(1,2,2)
     plt.imshow(golden_image,cmap='gray')
 
