@@ -370,6 +370,9 @@ salt_percent = 0.0
 patch_size = (14,14)
 patch_stride = 7
 
+#board
+logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
+
 #image scan directory setting
 training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\training_data_set'
 test_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
@@ -377,11 +380,12 @@ current_file_id = 0
 model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
 
-
+"""
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
 img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
 model_path = r'/home/pyp/paper/denosing/denoising_dl/model.ckpt'
+"""
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -399,18 +403,18 @@ current_image_true = None
  ---------------------------------------------------------
                   MLP control parameters
 """
-learning_rate = 0.5
+learning_rate = 0.3
 learning_period = 5
-learning_ratio = 0.9
-training_epochs = 500
-batch_size = 500
-num_examples = 15000
+learning_ratio = 0.8
+training_epochs = 100
+batch_size = 200
+num_examples = 10000
 display_step = 1
 
 # Network Parameters
-n_hidden_1 = 1024 # 1st layer number of features
-n_hidden_2 = 1024 # 2nd layer number of features
-n_hidden_3 = 1024 # 3nd layer number of features
+n_hidden_1 = 256 # 1st layer number of features
+n_hidden_2 = 256 # 2nd layer number of features
+n_hidden_3 = 256 # 3nd layer number of features
 n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
 n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
 prev_cost = 0
@@ -450,12 +454,27 @@ cost = tf.nn.l2_loss(pred-y)
 optimizer = tf.train.AdamOptimizer(learning_rate=lrate).minimize(cost)
 #optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(cost)
 # Initializing the variables
-#init = tf.global_variables_initializer()
-init = tf.initialize_all_variables()
+init = tf.global_variables_initializer()
+#init = tf.initialize_all_variables()
 saver = tf.train.Saver()
+
+#tensorboard
+tf.summary.histogram("weight1",weights['h1'])
+tf.summary.histogram("weight2",weights['h2'])
+tf.summary.histogram("weight3",weights['h3'])
+tf.summary.histogram("weightout",weights['out'])
+tf.summary.histogram("bias1",biases['b1'])
+tf.summary.histogram("bias2",biases['b2'])
+tf.summary.histogram("bias3",biases['b3'])
+tf.summary.histogram("biasout",biases['out'])
+tf.summary.scalar("loss",cost)
+merged_summary_op = tf.summary.merge_all()
+
+
 # Launch the graph
-with tf.Session() as sess:
+with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     sess.run(init)
+    summary_writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
     # Training cycle
     for epoch in range(training_epochs):
         avg_cost = 0.
@@ -468,11 +487,12 @@ with tf.Session() as sess:
             if batch_y == None:
                 break
             # Run optimization op (backprop) and cost op (to get loss value)
-            _, c = sess.run([optimizer, cost], feed_dict={x: batch_x,
+            _, c,summary = sess.run([optimizer, cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y,
                                                           lrate:learning_rate})
             #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
             # Compute average loss
+            summary_writer.add_summary(summary,epoch*total_batch+i)
             avg_cost += c
         # Display logs per epoch step
         if epoch % learning_period == 0:
