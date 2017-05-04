@@ -148,12 +148,20 @@ def saltAndPepperForRGB(img,percetage):
     generate patch based on patch_size,stride,number
 
 """
-def image_normalization(imgIn):
-    img_norm = (imgIn/255.0 - 0.5)*0.2;
-    return img_norm
+def get_mean_stddev(imageIn):
+    mean = np.mean(imageIn.reshape(-1))
+    stddev = np.std(imageIn.reshape(-1))
+    return mean,stddev
     
-def image_renorm(frame):
-    frame = (frame*5.0 + 0.5)*255.0
+def image_normalization(imgIn,mean,stddev):
+    #img_norm = (imgIn/255.0 - 0.5)*0.2;
+    img_norm = (imgIn - mean)/stddev
+    #img_norm = imgIn/255.0
+    return img_norm
+        
+def image_renorm(frame,mean,stddev):
+    #frame = (frame*5.0 + 0.5)*255.0
+    frame = frame * stddev + mean
     frame = np.array(frame,dtype=int)
     frame = frame.clip(0,255)
     return frame
@@ -179,7 +187,7 @@ def next_batch(result,batch_num):
         print("All training set is finished, need to reset the training set now!")
         
     if current_x == 0 and current_y == 0 and current_file_id < len(result):
-        image,image_true,_ = get_one_image(result[current_file_id]) 
+        image,image_true,_,_,_ = get_one_image(result[current_file_id]) 
         current_image = image
         current_image_true = image_true
         current_file_id = current_file_id + 1
@@ -218,7 +226,7 @@ def get_patches_one_image(image_name):
     patch_height = patch_size[0]
     patch_width  = patch_size[1]
     stride = patch_stride
-    image,image_true,_ = get_one_image(image_name)
+    image,image_true,_,mean,stddev = get_one_image(image_name)
     height_in_patch = (image.shape[0] + patch_stride - 1)//patch_stride
     width_in_patch = (image.shape[1] + patch_stride - 1)//patch_stride   
     num = height_in_patch * width_in_patch                   
@@ -237,7 +245,7 @@ def get_patches_one_image(image_name):
             current_y += stride
         else:
             current_x += stride
-    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1))
+    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1)),mean,stddev
 
 """
     convert image to fixed size, and do 3x3 matrix multiple
@@ -263,10 +271,11 @@ def get_one_image(filename):
         img = saltAndPepperForRGB(img_true,0)
     else :
         img = img_true
-    
-    img = image_normalization(img)
-    img_true1 = image_normalization(img_true)
-    return img,img_true1,img_true
+    mean,stddev = get_mean_stddev(img)
+    img = image_normalization(img,mean,stddev)
+    mean_true,stddev_true = get_mean_stddev(img_true)
+    img_true1 = image_normalization(img_true, mean_true,stddev_true)
+    return img,img_true1,img_true,mean,stddev
     
     
     #"""
@@ -333,16 +342,20 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
 def multilayer_perceptron(x, weights, biases):
     # Hidden layer with RELU activation
     layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
-    layer_1 = tf.nn.relu(layer_1)
+    #layer_1 = tf.nn.relu(layer_1)
+    layer_1 = tf.tanh(layer_1)
     # Hidden layer with RELU activation
-    layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
-    layer_2 = tf.nn.relu(layer_2)
+    #layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
+   # layer_2 = tf.nn.relu(layer_2)
+    #layer_2 = tf.sigmoid(layer_2)
     # Hidden layer with RELU activation
-    layer_3 = tf.add(tf.matmul(layer_2, weights['h3']), biases['b3'])
-    layer_3 = tf.nn.relu(layer_3)
+   # layer_3 = tf.add(tf.matmul(layer_2, weights['h3']), biases['b3'])
+   # layer_3 = tf.sigmoid(layer_3)
+    #layer_3 = tf.nn.relu(layer_3)
     
     # Output layer with linear activation
-    out_layer = tf.matmul(layer_3, weights['out']) + biases['out']                     
+    out_layer = tf.matmul(layer_1, weights['out']) + biases['out']
+                     
     return out_layer
        
 """
@@ -403,18 +416,19 @@ current_image_true = None
  ---------------------------------------------------------
                   MLP control parameters
 """
-learning_rate = 0.3
+tf.reset_default_graph()
+learning_rate = 0.2
 learning_period = 5
 learning_ratio = 0.8
-training_epochs = 100
+training_epochs = 200
 batch_size = 200
 num_examples = 10000
 display_step = 1
 
 # Network Parameters
-n_hidden_1 = 256 # 1st layer number of features
-n_hidden_2 = 256 # 2nd layer number of features
-n_hidden_3 = 256 # 3nd layer number of features
+n_hidden_1 = 196 # 1st layer number of features
+n_hidden_2 = 196 # 2nd layer number of features
+n_hidden_3 = 196 # 3nd layer number of features
 n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
 n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
 prev_cost = 0
@@ -515,8 +529,9 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     print("test image is:",test_image)
     patch_current_y = 0
     patch_current_x = 0
-    batch_x,batch_y = get_patches_one_image(test_image)
+    batch_x,batch_y,mean,stddev = get_patches_one_image(test_image)
     patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,lrate:learning_rate})
+    print(patch_recover)
     print("Test phase: cost = ", cost_test)
     #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
     frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
@@ -524,11 +539,12 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     golden_image = get_golden_image_show(test_image)
     print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
     plt.subplot(1,2,1)
-    frame = image_renorm(frame)
+    frame = image_renorm(frame,mean,stddev)
     plt.imshow(frame,cmap='gray')
     cv2.imwrite(img_path,frame)
     plt.subplot(1,2,2)
     plt.imshow(golden_image,cmap='gray')
+    
 
 
 
