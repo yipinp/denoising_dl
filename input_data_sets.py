@@ -148,23 +148,38 @@ def saltAndPepperForRGB(img,percetage):
     generate patch based on patch_size,stride,number
 
 """
-def get_mean_stddev(imageIn):
-    mean = np.mean(imageIn.reshape(-1))
-    stddev = np.std(imageIn.reshape(-1))
-    return mean,stddev
+def get_normal_param(imageIn,mode):
+    if mode == 0 :
+        mean = np.mean(imageIn.reshape(-1))
+        stddev = np.std(imageIn.reshape(-1))
+        return mean,stddev
+    else:
+       dmin = np.min(imageIn)
+       dmax = np.max(imageIn)  
+       return dmin,dmax 
     
-def image_normalization(imgIn,mean,stddev):
-    #img_norm = (imgIn/255.0 - 0.5)*0.2;
-    img_norm = (imgIn - mean)/stddev
-    #img_norm = imgIn/255.0
-    return img_norm
+def image_normalization(imgIn,p0,p1,mode):
+    if mode == 0:
+        #img_norm = (imgIn/255.0 - 0.5)*0.2;
+        img_norm = (imgIn - p0)/p1
+        #img_norm = imgIn/255.0
+        return img_norm
+    else:
+        return (imgIn - p0)/(p1 - p0)
         
-def image_renorm(frame,mean,stddev):
-    #frame = (frame*5.0 + 0.5)*255.0
-    frame = frame * stddev + mean
+def image_renorm(frame,p0,p1,mode):
+    if mode == 0:
+        #frame = (frame*5.0 + 0.5)*255.0
+        frame = frame * p1 + p0
+
+    else:
+        frame = frame * (p1 - p0) + p0
+        
     frame = np.array(frame,dtype=int)
     frame = frame.clip(0,255)
     return frame
+
+    
     
 #horizontal scan first then vertical,output array is [patch_height,patch_width,channel,number]    
 def next_batch(result,batch_num):
@@ -173,6 +188,7 @@ def next_batch(result,batch_num):
     global current_file_id
     global current_image
     global current_image_true
+    global mode
     image = current_image
     image_true = current_image_true
     patch_height = patch_size[0]
@@ -223,10 +239,11 @@ def next_batch(result,batch_num):
 def get_patches_one_image(image_name):
     global patch_current_x
     global patch_current_y
+    global mode
     patch_height = patch_size[0]
     patch_width  = patch_size[1]
     stride = patch_stride
-    image,image_true,_,mean,stddev = get_one_image(image_name)
+    image,image_true,_,p0,p1 = get_one_image(image_name)
     height_in_patch = (image.shape[0] + patch_stride - 1)//patch_stride
     width_in_patch = (image.shape[1] + patch_stride - 1)//patch_stride   
     num = height_in_patch * width_in_patch                   
@@ -245,7 +262,7 @@ def get_patches_one_image(image_name):
             current_y += stride
         else:
             current_x += stride
-    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1)),mean,stddev
+    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1)),p0,p1
 
 """
     convert image to fixed size, and do 3x3 matrix multiple
@@ -254,6 +271,7 @@ def get_one_image(filename):
     dst_size = image_size
     img_origin = cv2.imread(filename)
     global channel
+    global mode
     #convert to gray image
     if channel == 1:
         img_origin = cv2.cvtColor(img_origin,cv2.COLOR_BGR2GRAY)
@@ -271,11 +289,11 @@ def get_one_image(filename):
         img = saltAndPepperForRGB(img_true,0)
     else :
         img = img_true
-    mean,stddev = get_mean_stddev(img)
-    img = image_normalization(img,mean,stddev)
-    mean_true,stddev_true = get_mean_stddev(img_true)
-    img_true1 = image_normalization(img_true, mean_true,stddev_true)
-    return img,img_true1,img_true,mean,stddev
+    p0,p1 = get_normal_param(img,mode)
+    img = image_normalization(img,p0,p1,mode)
+    p0_true,p1_true = get_normal_param(img_true,mode)
+    img_true1 = image_normalization(img_true, p0,p1,mode)
+    return img,img_true1,img_true,p0,p1
     
     
     #"""
@@ -342,8 +360,9 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
 def multilayer_perceptron(x, weights, biases):
     # Hidden layer with RELU activation
     layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
-    #layer_1 = tf.nn.relu(layer_1)
-    layer_1 = tf.tanh(layer_1)
+    layer_1 = tf.nn.relu(layer_1)
+    #layer_1 = tf.tanh(layer_1)
+    #layer_1 = tf.sigmoid(layer_1)
     # Hidden layer with RELU activation
     #layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
    # layer_2 = tf.nn.relu(layer_2)
@@ -393,12 +412,12 @@ current_file_id = 0
 model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
 
-"""
+
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
 img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
 model_path = r'/home/pyp/paper/denosing/denoising_dl/model.ckpt'
-"""
+
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -420,9 +439,9 @@ tf.reset_default_graph()
 learning_rate = 0.2
 learning_period = 5
 learning_ratio = 0.8
-training_epochs = 200
-batch_size = 200
-num_examples = 10000
+training_epochs = 3
+batch_size = 150
+num_examples = 20000
 display_step = 1
 
 # Network Parameters
@@ -433,8 +452,11 @@ n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
 n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
 prev_cost = 0
 channel = 1
+mode = 1 #mean,stddev, 1: min,max
+
 
 # Store layers weight & bias
+"""
 weights = {
     'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
     'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
@@ -446,6 +468,19 @@ biases = {
     'b2': tf.Variable(tf.random_normal([n_hidden_2])),
     'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
     'out': tf.Variable(tf.random_normal([n_output]))
+}
+"""
+weights = {
+    'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
+    'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
+    'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),
+    'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=0,maxval=1.0,dtype=tf.float32))
+}
+biases = {
+    'b1': tf.Variable(tf.random_uniform([n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
+    'b2': tf.Variable(tf.random_uniform([n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
+    'b3': tf.Variable(tf.random_uniform([n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),                                    
+    'out': tf.Variable(tf.random_uniform([n_output],minval=0,maxval=1.0,dtype=tf.float32))
 }
 
 # tf Graph input
@@ -529,7 +564,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     print("test image is:",test_image)
     patch_current_y = 0
     patch_current_x = 0
-    batch_x,batch_y,mean,stddev = get_patches_one_image(test_image)
+    batch_x,batch_y,p0,p1 = get_patches_one_image(test_image)
     patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,lrate:learning_rate})
     print(patch_recover)
     print("Test phase: cost = ", cost_test)
@@ -539,7 +574,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     golden_image = get_golden_image_show(test_image)
     print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
     plt.subplot(1,2,1)
-    frame = image_renorm(frame,mean,stddev)
+    frame = image_renorm(frame,p0,p1,mode)
     plt.imshow(frame,cmap='gray')
     cv2.imwrite(img_path,frame)
     plt.subplot(1,2,2)
