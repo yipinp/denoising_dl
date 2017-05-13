@@ -439,11 +439,12 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 0.9
-training_epochs = 50
+training_epochs = 60
 batch_size = 150
 num_examples = 20000
 display_step = 1
-threshold_adjust = 0.99
+threshold_adjust = 0.90
+early_termination_threshold = 0.01
 
 # Network Parameters
 n_hidden_1 = 256 # 1st layer number of features
@@ -456,7 +457,7 @@ channel = 1
 mode = 1 #mean,stddev, 1: min,max
 
 #continuous traing or training from scatch
-training_mode = "continuou"   # scratch,continuous
+training_mode = "continuous"   # scratch,continuous
 #training_mode = "scratch"
 save_step = 50 
 
@@ -560,7 +561,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             print("current learning rate is :",sess.run(learning_rate))
             prev_cost = avg_cost
         if avg_cost > prev_cost*threshold_adjust  and epoch % learning_period == learning_period - 1:
-            if abs(prev_cost - avg_cost) < (1- threshold_adjust)*avg_cost:
+            if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
                 print("Early termination!",prev_cost,avg_cost)
                 break
             learning_rate *= learning_ratio
