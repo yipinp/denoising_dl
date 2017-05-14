@@ -22,6 +22,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import random
 import tensorflow as tf
+import random 
 #from tflearn.layers.core import input_data,dropout,fully_connected
 #from tflearn.layers.conv import conv2d,max_pool_2d
 #from tflearn.layers.normalization import local_response_normalization
@@ -200,7 +201,8 @@ def next_batch(result,batch_num):
     
     if current_file_id >= len(result):
         current_file_id = 0   #reload training set if finished
-        print("All training set is finished, need to reset the training set now!")
+        print("All training set is finished, need to reset and shuffle the training set now!")
+        random.shuffle(result)
         
     if current_x == 0 and current_y == 0 and current_file_id < len(result):
         image,image_true,_,_,_ = get_one_image(result[current_file_id]) 
@@ -262,7 +264,7 @@ def get_patches_one_image(image_name):
             current_y += stride
         else:
             current_x += stride
-    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1)),p0,p1
+    return np.reshape(c[0:i+1,:,:],(i+1,-1)),np.reshape(c_true[0:i+1,:,:],(i+1,-1)),p0,p1,num
 
 """
     convert image to fixed size, and do 3x3 matrix multiple
@@ -439,7 +441,7 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 0.9
-training_epochs = 60
+training_epochs = 150
 batch_size = 150
 num_examples = 20000
 display_step = 1
@@ -447,9 +449,9 @@ threshold_adjust = 0.90
 early_termination_threshold = 0.01
 
 # Network Parameters
-n_hidden_1 = 256 # 1st layer number of features
-n_hidden_2 = 256 # 2nd layer number of features
-n_hidden_3 = 256 # 3nd layer number of features
+n_hidden_1 = 128 # 1st layer number of features
+n_hidden_2 = 128 # 2nd layer number of features
+n_hidden_3 = 128 # 3nd layer number of features
 n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
 n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
 prev_cost = 0
@@ -555,7 +557,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
             # Compute average loss
             summary_writer.add_summary(summary,epoch*total_batch+i)
-            avg_cost += c
+            avg_cost += c/num_examples
         # Display logs per epoch step
         if epoch % learning_period == 0:
             print("current learning rate is :",sess.run(learning_rate))
@@ -572,20 +574,22 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
                 "{:.9f}".format(avg_cost))
                 
         if (epoch + 1)% save_step == 0 :
-            saver.save(sess,model_path + 'model.ckpt',global_step = epoch + 1)                 
-        
+            saver.save(sess,model_path + 'model.ckpt',global_step = epoch + 1)
+
+    #save the last step     
+    saver.save(sess,model_path + 'model.ckpt',global_step = training_epochs)                   
     print("Optimization Finished!")
     
 
     print("Start test phase for one image!")
-    test_image = result[0]
+    test_image = result_test[0]
     print("test image is:",test_image)
     patch_current_y = 0
     patch_current_x = 0
-    batch_x,batch_y,p0,p1 = get_patches_one_image(test_image)
+    batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
     patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
     print(patch_recover)
-    print("Test phase: cost = ", cost_test)
+    print("Test phase: cost = ", cost_test/patch_num)
     #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
     frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
     golden_image = get_golden_image_show(test_image)
