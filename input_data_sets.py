@@ -23,6 +23,7 @@ from matplotlib import pyplot as plt
 import random
 import tensorflow as tf
 import random 
+import time
 #from tflearn.layers.core import input_data,dropout,fully_connected
 #from tflearn.layers.conv import conv2d,max_pool_2d
 #from tflearn.layers.normalization import local_response_normalization
@@ -405,22 +406,25 @@ patch_size = (14,14)
 patch_stride = 7
 
 #board
-logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
+
 
 #image scan directory setting
 training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\training_data_set'
 test_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
 current_file_id = 0
-model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\model.ckpt"
+model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models"
+model_name = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models\model.ckpt"
+logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
 
-
+"""
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
 img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
 model_path = r'/home/pyp/paper/denosing/denoising_dl/models/'
+model_name = r'/home/pyp/paper/denosing/denoising_dl/models/model.ckpt'
 logs_path = r'/home/pyp/paper/denosing/denoising_dl/board'
-
+"""
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -441,8 +445,8 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 0.9
-training_epochs = 150
-batch_size = 150
+training_epochs = 60
+batch_size = 10
 num_examples = 20000
 display_step = 1
 threshold_adjust = 0.90
@@ -459,12 +463,12 @@ channel = 1
 mode = 1 #mean,stddev, 1: min,max
 
 #continuous traing or training from scatch
-training_mode = "continuous"   # scratch,continuous
+training_mode = "continuou"   # scratch,continuous
 #training_mode = "scratch"
 save_step = 50 
 
 #Vriable defines which can be save/restore by saver
-learning_rate = tf.Variable(0.01,dtype="float",name="learning_rate")
+learning_rate = tf.Variable(0.005,dtype="float",name="learning_rate")
 
 # Store layers weight & bias
 """
@@ -481,6 +485,9 @@ biases = {
     'out': tf.Variable(tf.random_normal([n_output]))
 }
 """
+seed = time.time()
+print("randome seed is :", seed)
+tf.set_random_seed(seed)
 weights = {
     'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
     'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
@@ -538,6 +545,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     if training_mode == "continuous" :
         ckpt = tf.train.get_checkpoint_state(model_path)
         if ckpt and ckpt.model_checkpoint_path:
+            print("continuous mode is enabled, the cp is :",ckpt.model_checkpoint_path)
             saver.restore(sess,ckpt.model_checkpoint_path)
     # Training cycle
     for epoch in range(training_epochs):
@@ -571,13 +579,13 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             
         if epoch % display_step == 0:
             print("Epoch:", '%04d' % (epoch+1), "cost=", \
-                "{:.9f}".format(avg_cost))
+                "{:.9f}".format(avg_cost),",weight_out:",sess.run(tf.nn.moments(tf.reshape(weights['out'],[-1]),axes=[0])),",bias out:",sess.run(tf.nn.moments(tf.reshape(biases['out'],[-1]),axes=[0])))
                 
         if (epoch + 1)% save_step == 0 :
-            saver.save(sess,model_path + 'model.ckpt',global_step = epoch + 1)
+            saver.save(sess,model_name,global_step = epoch + 1)
 
     #save the last step     
-    saver.save(sess,model_path + 'model.ckpt',global_step = training_epochs)                   
+    saver.save(sess,model_name,global_step = training_epochs)                   
     print("Optimization Finished!")
     
 
@@ -590,6 +598,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
     print(patch_recover)
     print("Test phase: cost = ", cost_test/patch_num)
+    print("weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))
     #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
     frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
     golden_image = get_golden_image_show(test_image)
