@@ -445,7 +445,7 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 0.9
-training_epochs = 200
+training_epochs = 20
 batch_size = 10
 num_examples = 20000
 display_step = 1
@@ -463,7 +463,7 @@ channel = 1
 mode = 1 #mean,stddev, 1: min,max
 
 #continuous traing or training from scatch
-training_mode = "test_only"#"continuous"   # continuous,test_only
+training_mode = "continuous"   # continuous,test_only
 #training_mode = "scratch"
 save_step = 50 
 
@@ -571,15 +571,16 @@ if training_mode != "test_only":
                 summary_writer.add_summary(summary,epoch*total_batch+i)
                 avg_cost += c/num_examples
                 # Display logs per epoch step
-                if epoch % learning_period == 0:
-                   print("current learning rate is :",sess.run(learning_rate))
-                   prev_cost = avg_cost
-                if avg_cost > prev_cost*threshold_adjust  and epoch % learning_period == learning_period - 1:
-                   if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
-                       print("Early termination!",prev_cost,avg_cost)
-                       #break
-                   learning_rate *= learning_ratio
-                   print("Adjust learning rate to ",sess.run(learning_rate))
+            if epoch % learning_period == 0:
+                print("current learning rate is :",sess.run(learning_rate))
+                prev_cost = avg_cost
+                   
+            if avg_cost > prev_cost*threshold_adjust  and epoch % learning_period == learning_period - 1:
+                 if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
+                     print("Early termination!",prev_cost,avg_cost)
+                     #break
+                 learning_rate *= learning_ratio
+                 print("Adjust learning rate to ",sess.run(learning_rate))
             
             if epoch % display_step == 0:
                 print("Epoch:", '%04d' % (epoch+1), "cost=", \
