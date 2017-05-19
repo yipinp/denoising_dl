@@ -363,17 +363,17 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
 def multilayer_perceptron(x, weights, biases):
     # Hidden layer with RELU activation
     layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
-    layer_1 = tf.nn.relu(layer_1)
+    #layer_1 = tf.nn.relu(layer_1)
     #layer_1 = tf.tanh(layer_1)
-    #layer_1 = tf.sigmoid(layer_1)
+    layer_1 = tf.sigmoid(layer_1)
     # Hidden layer with RELU activation
     layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
-    layer_2 = tf.nn.relu(layer_2)
-    #layer_2 = tf.sigmoid(layer_2)
+    #layer_2 = tf.nn.relu(layer_2)
+    layer_2 = tf.sigmoid(layer_2)
     # Hidden layer with RELU activation
     layer_3 = tf.add(tf.matmul(layer_2, weights['h3']), biases['b3'])
-   # layer_3 = tf.sigmoid(layer_3)
-    layer_3 = tf.nn.relu(layer_3)
+    layer_3 = tf.sigmoid(layer_3)
+    #layer_3 = tf.nn.relu(layer_3)
     
     # Output layer with linear activation
     out_layer = tf.matmul(layer_3, weights['out']) + biases['out']
@@ -415,16 +415,16 @@ current_file_id = 0
 model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models"
 model_name = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models\model.ckpt"
 logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
-img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.jpg"
+img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output"
 
-"""
+
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
-img_path = r'/home/pyp/paper/denosing/denoising_dl/output.jpg'
-model_path = r'/home/pyp/paper/denosing/denoising_dl/models/'
+img_path = r'/home/pyp/paper/denosing/denoising_dl/output'
+model_path = r'/home/pyp/paper/denosing/denoising_dl/models'
 model_name = r'/home/pyp/paper/denosing/denoising_dl/models/model.ckpt'
 logs_path = r'/home/pyp/paper/denosing/denoising_dl/board'
-"""
+
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -445,7 +445,7 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 0.9
-training_epochs = 60
+training_epochs = 200
 batch_size = 10
 num_examples = 20000
 display_step = 1
@@ -463,15 +463,19 @@ channel = 1
 mode = 1 #mean,stddev, 1: min,max
 
 #continuous traing or training from scatch
-training_mode = "continuou"   # scratch,continuous
+training_mode = "test_only"#"continuous"   # continuous,test_only
 #training_mode = "scratch"
 save_step = 50 
 
 #Vriable defines which can be save/restore by saver
-learning_rate = tf.Variable(0.005,dtype="float",name="learning_rate")
+learning_rate = tf.Variable(0.0001,dtype="float",name="learning_rate")
+
+seed = time.time()
+print("random seed is :", seed)
+tf.set_random_seed(seed)
 
 # Store layers weight & bias
-"""
+
 weights = {
     'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
     'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
@@ -484,10 +488,8 @@ biases = {
     'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
     'out': tf.Variable(tf.random_normal([n_output]))
 }
+
 """
-seed = time.time()
-print("randome seed is :", seed)
-tf.set_random_seed(seed)
 weights = {
     'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
     'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
@@ -500,6 +502,7 @@ biases = {
     'b3': tf.Variable(tf.random_uniform([n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),                                    
     'out': tf.Variable(tf.random_uniform([n_output],minval=0,maxval=1.0,dtype=tf.float32))
 }
+"""
 
 # tf Graph input
 x = tf.placeholder("float", [None, n_input])
@@ -539,76 +542,86 @@ merged_summary_op = tf.summary.merge_all()
 
 
 # Launch the graph
-with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
-    sess.run(init)
-    summary_writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
-    if training_mode == "continuous" :
-        ckpt = tf.train.get_checkpoint_state(model_path)
-        if ckpt and ckpt.model_checkpoint_path:
-            print("continuous mode is enabled, the cp is :",ckpt.model_checkpoint_path)
-            saver.restore(sess,ckpt.model_checkpoint_path)
-    # Training cycle
-    for epoch in range(training_epochs):
-        avg_cost = 0.
-        current_file_id = 0 # reset patch read index
-        total_batch = int(num_examples/batch_size)
-        # Loop over all batches
-        for i in range(total_batch):
-            batch_x, batch_y = next_batch(result,batch_size)
+if training_mode != "test_only":
+    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+        sess.run(init)
+        summary_writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
+        if training_mode == "continuous" :
+            ckpt = tf.train.get_checkpoint_state(model_path)
+            if ckpt and ckpt.model_checkpoint_path:
+                print("continuous mode is enabled, the cp is :",ckpt.model_checkpoint_path)
+                saver.restore(sess,ckpt.model_checkpoint_path)
+        # Training cycle
+        for epoch in range(training_epochs):
+            avg_cost = 0.
+            current_file_id = 0 # reset patch read index
+            total_batch = int(num_examples/batch_size)
+            # Loop over all batches
+            for i in range(total_batch):
+                batch_x, batch_y = next_batch(result,batch_size)
             
-            if batch_y == None:
-                break
-            # Run optimization op (backprop) and cost op (to get loss value)
-            _, c,summary = sess.run([optimizer, cost,merged_summary_op], feed_dict={x: batch_x,
+                if batch_y == None:
+                    break
+                # Run optimization op (backprop) and cost op (to get loss value)
+                _, c,summary = sess.run([optimizer, cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y
                                                           })
-            #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
-            # Compute average loss
-            summary_writer.add_summary(summary,epoch*total_batch+i)
-            avg_cost += c/num_examples
-        # Display logs per epoch step
-        if epoch % learning_period == 0:
-            print("current learning rate is :",sess.run(learning_rate))
-            prev_cost = avg_cost
-        if avg_cost > prev_cost*threshold_adjust  and epoch % learning_period == learning_period - 1:
-            if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
-                print("Early termination!",prev_cost,avg_cost)
-                break
-            learning_rate *= learning_ratio
-            print("Adjust learning rate to ",sess.run(learning_rate))
+               #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
+               # Compute average loss
+                summary_writer.add_summary(summary,epoch*total_batch+i)
+                avg_cost += c/num_examples
+                # Display logs per epoch step
+                if epoch % learning_period == 0:
+                   print("current learning rate is :",sess.run(learning_rate))
+                   prev_cost = avg_cost
+                if avg_cost > prev_cost*threshold_adjust  and epoch % learning_period == learning_period - 1:
+                   if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
+                       print("Early termination!",prev_cost,avg_cost)
+                       #break
+                   learning_rate *= learning_ratio
+                   print("Adjust learning rate to ",sess.run(learning_rate))
             
-        if epoch % display_step == 0:
-            print("Epoch:", '%04d' % (epoch+1), "cost=", \
-                "{:.9f}".format(avg_cost),",weight_out:",sess.run(tf.nn.moments(tf.reshape(weights['out'],[-1]),axes=[0])),",bias out:",sess.run(tf.nn.moments(tf.reshape(biases['out'],[-1]),axes=[0])))
+            if epoch % display_step == 0:
+                print("Epoch:", '%04d' % (epoch+1), "cost=", \
+                    "{:.9f}".format(avg_cost),",weight_out:",sess.run(tf.nn.moments(tf.reshape(weights['out'],[-1]),axes=[0])),",bias out:",sess.run(tf.nn.moments(tf.reshape(biases['out'],[-1]),axes=[0])))
                 
-        if (epoch + 1)% save_step == 0 :
-            saver.save(sess,model_name,global_step = epoch + 1)
+            if (epoch + 1)% save_step == 0 :
+                saver.save(sess,model_name,global_step = epoch + 1)
 
-    #save the last step     
-    saver.save(sess,model_name,global_step = training_epochs)                   
-    print("Optimization Finished!")
+        #save the last step     
+        saver.save(sess,model_name,global_step = epoch+1)   
+        print("Training weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))                
+        print("Optimization Finished!")
     
-
+#Test phase    
+with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     print("Start test phase for one image!")
-    test_image = result_test[0]
-    print("test image is:",test_image)
-    patch_current_y = 0
-    patch_current_x = 0
-    batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
-    patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
-    print(patch_recover)
-    print("Test phase: cost = ", cost_test/patch_num)
-    print("weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))
-    #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
-    frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
-    golden_image = get_golden_image_show(test_image)
-    print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
-    plt.subplot(1,2,1)
-    frame = image_renorm(frame,p0,p1,mode)
-    plt.imshow(frame,cmap='gray')
-    cv2.imwrite(img_path,frame)
-    plt.subplot(1,2,2)
-    plt.imshow(golden_image,cmap='gray')
+    ckpt = tf.train.get_checkpoint_state(model_path)
+    if ckpt and ckpt.model_checkpoint_path:
+        print("Test mode is enabled, load the cp is :",ckpt.model_checkpoint_path)
+        saver.restore(sess,ckpt.model_checkpoint_path)
+        
+    for i in range(len(result_test)):
+        test_image = result_test[i]
+        print("test image is:",test_image)
+        patch_current_y = 0
+        patch_current_x = 0
+        batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
+        patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
+        #print(patch_recover)
+        print("Test phase: cost = ", cost_test/patch_num)
+        #print("Test weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))
+        #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
+        frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
+        golden_image = get_golden_image_show(test_image)
+        #print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
+        plt.subplot(1,2,1)
+        frame = image_renorm(frame,p0,p1,mode)
+        plt.imshow(frame,cmap='gray')
+        cv2.imwrite(img_path+str(i)+".jpg",frame)
+        plt.subplot(1,2,2)
+        plt.imshow(golden_image,cmap='gray')
+        plt.show()
     
 
 
