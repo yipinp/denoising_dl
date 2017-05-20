@@ -445,12 +445,12 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 0.9
-training_epochs = 20
+training_epochs = 100
 batch_size = 10
 num_examples = 20000
 display_step = 1
 threshold_adjust = 0.90
-early_termination_threshold = 0.01
+early_termination_threshold = 1/100000
 
 # Network Parameters
 n_hidden_1 = 128 # 1st layer number of features
@@ -541,7 +541,7 @@ tf.summary.scalar("loss",cost)
 merged_summary_op = tf.summary.merge_all()
 
 
-# Launch the graph
+# Launch the graph for training phase
 if training_mode != "test_only":
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         sess.run(init)
@@ -614,12 +614,16 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         #print("Test weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))
         #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
         frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
+        frame = image_renorm(frame,p0,p1,mode)
+        frame_noise = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_x)
+        frame_noise = image_renorm(frame_noise,p0,p1,mode)
         golden_image = get_golden_image_show(test_image)
         #print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
-        plt.subplot(1,2,1)
-        frame = image_renorm(frame,p0,p1,mode)
+        plt.subplot(1,2,1)       
         plt.imshow(frame,cmap='gray')
         cv2.imwrite(img_path+str(i)+".jpg",frame)
+        cv2.imwrite(img_path+str(i)+"_golden.jpg",golden_image)        
+        cv2.imwrite(img_path+str(i)+"_noise.jpg",frame_noise)
         plt.subplot(1,2,2)
         plt.imshow(golden_image,cmap='gray')
         plt.show()
