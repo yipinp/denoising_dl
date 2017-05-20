@@ -24,6 +24,9 @@ import random
 import tensorflow as tf
 import random 
 import time
+from skimage.measure import compare_ssim as ssim
+from skimage.measure import compare_psnr as psnr
+
 #from tflearn.layers.core import input_data,dropout,fully_connected
 #from tflearn.layers.conv import conv2d,max_pool_2d
 #from tflearn.layers.normalization import local_response_normalization
@@ -352,8 +355,31 @@ def image_recovery(frame_height,frame_width,patch_height,patch_width,patch_strid
              
     np.savetxt("frame.txt",frame[0:frame_height,0:frame_width],fmt="%f")    
     return frame[0:frame_height,0:frame_width]
-   
-   
+
+
+
+"""
+    image quality evalution psnr/ssim
+    
+    mse = ((image-image_golden)**2).mean()
+    if mode == "PSNR":
+        cost = 10*np.log10((255**2)/mse)
+    elif mode == "SSIM":
+        cost = ssim(image,image_golden)    
+    
+    
+"""
+def evaluate_image(mode,image,image_golden):
+
+    if mode == "PSNR":
+        cost = psnr(image,image_golden,255.0)
+    elif mode == "SSIM": 
+        cost = ssim(image,image_golden,data_range=255.0)
+    
+    return cost
+
+
+
     
 """    
    ---------------------------------------------------------------------------
@@ -445,7 +471,7 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 0.9
-training_epochs = 100
+training_epochs = 300
 batch_size = 10
 num_examples = 20000
 display_step = 1
@@ -463,8 +489,7 @@ channel = 1
 mode = 1 #mean,stddev, 1: min,max
 
 #continuous traing or training from scatch
-training_mode = "continuous"   # continuous,test_only
-#training_mode = "scratch"
+training_mode = "test_only" #"continuous"   # continuous,test_only
 save_step = 50 
 
 #Vriable defines which can be save/restore by saver
@@ -613,21 +638,27 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         print("Test phase: cost = ", cost_test/patch_num)
         #print("Test weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))
         #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
-        frame = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
-        frame = image_renorm(frame,p0,p1,mode)
+        frame_denoise = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
+        frame_denoise = image_renorm(frame_denoise,p0,p1,mode)
         frame_noise = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_x)
         frame_noise = image_renorm(frame_noise,p0,p1,mode)
         golden_image = get_golden_image_show(test_image)
         #print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
         plt.subplot(1,2,1)       
-        plt.imshow(frame,cmap='gray')
-        cv2.imwrite(img_path+str(i)+".jpg",frame)
+        plt.imshow(frame_denoise,cmap='gray')
+        cv2.imwrite(img_path+str(i)+".jpg",frame_denoise)
         cv2.imwrite(img_path+str(i)+"_golden.jpg",golden_image)        
         cv2.imwrite(img_path+str(i)+"_noise.jpg",frame_noise)
         plt.subplot(1,2,2)
         plt.imshow(golden_image,cmap='gray')
         plt.show()
-    
+        
+        #print image quality
+        noise_psnr = evaluate_image("PSNR",golden_image.astype(np.uint8),frame_noise.astype(np.uint8))
+        noise_ssim = evaluate_image("SSIM",golden_image.astype(np.uint8),frame_noise.astype(np.uint8))
+        denoise_psnr = evaluate_image("PSNR",golden_image.astype(np.uint8),frame_denoise.astype(np.uint8))
+        denoise_ssim = evaluate_image("SSIM",golden_image.astype(np.uint8),frame_denoise.astype(np.uint8))
+        print("After denoising, the psnr is from %f to %f, ssim from %f to %f :" %(noise_psnr,denoise_psnr,noise_ssim,denoise_ssim))
 
 
 
