@@ -469,10 +469,10 @@ current_image_true = None
                   MLP control parameters
 """
 tf.reset_default_graph()
-learning_period = 10
-learning_ratio = 0.9
-training_epochs = 300
-batch_size = 10
+learning_period = 20
+learning_ratio = 0.95
+training_epochs = 200
+batch_size = 100
 num_examples = 20000
 display_step = 1
 threshold_adjust = 0.90
@@ -481,7 +481,7 @@ early_termination_threshold = 1/100000
 # Network Parameters
 n_hidden_1 = 128 # 1st layer number of features
 n_hidden_2 = 128 # 2nd layer number of features
-n_hidden_3 = 128 # 3nd layer number of features
+n_hidden_3 = 256 # 3nd layer number of features
 n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
 n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
 prev_cost = 0
@@ -489,8 +489,9 @@ channel = 1
 mode = 1 #mean,stddev, 1: min,max
 
 #continuous traing or training from scatch
-training_mode = "test_only" #"continuous"   # continuous,test_only
-save_step = 50 
+#training_mode = "test_only" # continuous,test_only
+training_mode = "continuous"
+save_step = 20 
 
 #Vriable defines which can be save/restore by saver
 learning_rate = tf.Variable(0.0001,dtype="float",name="learning_rate")
@@ -577,6 +578,7 @@ if training_mode != "test_only":
                 print("continuous mode is enabled, the cp is :",ckpt.model_checkpoint_path)
                 saver.restore(sess,ckpt.model_checkpoint_path)
         # Training cycle
+                
         for epoch in range(training_epochs):
             avg_cost = 0.
             current_file_id = 0 # reset patch read index
@@ -604,7 +606,7 @@ if training_mode != "test_only":
                  if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
                      print("Early termination!",prev_cost,avg_cost)
                      #break
-                 learning_rate *= learning_ratio
+                 sess.run(tf.assign(learning_rate,learning_rate *learning_ratio))
                  print("Adjust learning rate to ",sess.run(learning_rate))
             
             if epoch % display_step == 0:
@@ -612,9 +614,11 @@ if training_mode != "test_only":
                     "{:.9f}".format(avg_cost),",weight_out:",sess.run(tf.nn.moments(tf.reshape(weights['out'],[-1]),axes=[0])),",bias out:",sess.run(tf.nn.moments(tf.reshape(biases['out'],[-1]),axes=[0])))
                 
             if (epoch + 1)% save_step == 0 :
+                print("Save model in epoch ",epoch+1, " learning rate is:",sess.run(learning_rate)) 
                 saver.save(sess,model_name,global_step = epoch + 1)
 
-        #save the last step     
+        #save the last step   
+        print("Save model in epoch ",epoch+1, " learning rate is:",sess.run(learning_rate)) 
         saver.save(sess,model_name,global_step = epoch+1)   
         print("Training weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))                
         print("Optimization Finished!")
@@ -626,6 +630,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     if ckpt and ckpt.model_checkpoint_path:
         print("Test mode is enabled, load the cp is :",ckpt.model_checkpoint_path)
         saver.restore(sess,ckpt.model_checkpoint_path)
+        print("Restore model and learning rate is:",sess.run(learning_rate))
         
     for i in range(len(result_test)):
         test_image = result_test[i]
