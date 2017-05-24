@@ -471,7 +471,7 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 20
 learning_ratio = 0.95
-training_epochs = 200
+training_epochs = 100
 batch_size = 100
 num_examples = 20000
 display_step = 1
@@ -491,10 +491,13 @@ mode = 1 #mean,stddev, 1: min,max
 #continuous traing or training from scatch
 #training_mode = "test_only" # continuous,test_only
 training_mode = "continuous"
+reset_learning_rate_enable = 0
+reset_learning_rate = 0.00001  #when rerun the epoch, if need to reset the learning rate
+learning_rate_threshold = 0.00001 #not below the value for learning rate
 save_step = 20 
 
 #Vriable defines which can be save/restore by saver
-learning_rate = tf.Variable(0.0001,dtype="float",name="learning_rate")
+learning_rate = tf.Variable(0.001,dtype="float",name="learning_rate")
 
 seed = time.time()
 print("random seed is :", seed)
@@ -577,6 +580,10 @@ if training_mode != "test_only":
             if ckpt and ckpt.model_checkpoint_path:
                 print("continuous mode is enabled, the cp is :",ckpt.model_checkpoint_path)
                 saver.restore(sess,ckpt.model_checkpoint_path)
+                if reset_learning_rate_enable == 1:
+                    print("Reset learning rate after restore when the learning rate is too small for converge!")
+                    sess.run(tf.assign(learning_rate,reset_learning_rate))
+                    
         # Training cycle
                 
         for epoch in range(training_epochs):
@@ -587,7 +594,7 @@ if training_mode != "test_only":
             for i in range(total_batch):
                 batch_x, batch_y = next_batch(result,batch_size)
             
-                if batch_y == None:
+                if batch_y is None:
                     break
                 # Run optimization op (backprop) and cost op (to get loss value)
                 _, c,summary = sess.run([optimizer, cost,merged_summary_op], feed_dict={x: batch_x,
@@ -606,7 +613,9 @@ if training_mode != "test_only":
                  if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
                      print("Early termination!",prev_cost,avg_cost)
                      #break
-                 sess.run(tf.assign(learning_rate,learning_rate *learning_ratio))
+                
+                 learning_rate = tf.cond(tf.greater(learning_rate,learning_rate_threshold),lambda:learning_rate *learning_ratio,lambda:learning_rate)
+                 # sess.run(tf.assign(learning_rate,learning_rate *learning_ratio))
                  print("Adjust learning rate to ",sess.run(learning_rate))
             
             if epoch % display_step == 0:
