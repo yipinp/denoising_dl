@@ -494,7 +494,7 @@ training_mode = "continuous"
 reset_learning_rate_enable = 0
 reset_learning_rate = 0.00001  #when rerun the epoch, if need to reset the learning rate
 learning_rate_threshold = 0.00001 #not below the value for learning rate
-save_step = 20 
+save_step = 20
 
 #Vriable defines which can be save/restore by saver
 learning_rate = tf.Variable(0.001,dtype="float",name="learning_rate")
@@ -608,15 +608,14 @@ if training_mode != "test_only":
             if epoch % learning_period == 0:
                 print("current learning rate is :",sess.run(learning_rate))
                 prev_cost = avg_cost
-                   
+      
             if avg_cost > prev_cost*threshold_adjust  and epoch % learning_period == learning_period - 1:
                  if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
                      print("Early termination!",prev_cost,avg_cost)
                      #break
-                
-                 learning_rate = tf.cond(tf.greater(learning_rate,learning_rate_threshold),lambda:learning_rate *learning_ratio,lambda:learning_rate)
-                 # sess.run(tf.assign(learning_rate,learning_rate *learning_ratio))
-                 print("Adjust learning rate to ",sess.run(learning_rate))
+                 if sess.run(learning_rate) > learning_rate_threshold :
+                     sess.run(tf.assign(learning_rate,learning_rate *learning_ratio))
+                     print("Adjust learning rate to ",sess.run(learning_rate))
             
             if epoch % display_step == 0:
                 print("Epoch:", '%04d' % (epoch+1), "cost=", \
