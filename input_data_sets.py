@@ -386,20 +386,33 @@ def evaluate_image(mode,image,image_golden):
                  Basic layers & MLP & AlexNet 
 """
 # Create model
-def multilayer_perceptron(x, weights, biases):
+def multilayer_perceptron(x, weights, biases,activate):
     # Hidden layer with RELU activation
     layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
-    #layer_1 = tf.nn.relu(layer_1)
-    #layer_1 = tf.tanh(layer_1)
-    layer_1 = tf.sigmoid(layer_1)
+    if activate =="Relu":
+        layer_1 = tf.nn.relu(layer_1)
+    elif activate =="Sigmid":
+        layer_1 = tf.sigmoid(layer_1)
+    else:
+        layer_1 = tf.tanh(layer_1)
+
     # Hidden layer with RELU activation
     layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
-    #layer_2 = tf.nn.relu(layer_2)
-    layer_2 = tf.sigmoid(layer_2)
+    if activate =="Relu":
+        layer_2 = tf.nn.relu(layer_2)
+    elif activate =="Sigmid":
+        layer_2 = tf.sigmoid(layer_2)
+    else:
+        layer_2 = tf.tanh(layer_2)
+
     # Hidden layer with RELU activation
     layer_3 = tf.add(tf.matmul(layer_2, weights['h3']), biases['b3'])
-    layer_3 = tf.sigmoid(layer_3)
-    #layer_3 = tf.nn.relu(layer_3)
+    if activate =="Relu":
+        layer_3 = tf.nn.relu(layer_3)
+    elif activate =="Sigmid":
+        layer_3 = tf.sigmoid(layer_3)
+    else:
+        layer_3 = tf.tanh(layer_3)
     
     # Output layer with linear activation
     out_layer = tf.matmul(layer_3, weights['out']) + biases['out']
@@ -470,8 +483,8 @@ current_image_true = None
 """
 tf.reset_default_graph()
 learning_period = 20
-learning_ratio = 0.95
-training_epochs = 100
+learning_ratio = 1.0
+training_epochs = 200
 batch_size = 100
 num_examples = 20000
 display_step = 1
@@ -480,20 +493,21 @@ early_termination_threshold = 1/100000
 
 # Network Parameters
 n_hidden_1 = 128 # 1st layer number of features
-n_hidden_2 = 128 # 2nd layer number of features
+n_hidden_2 = 256 # 2nd layer number of features
 n_hidden_3 = 256 # 3nd layer number of features
 n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
 n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
 prev_cost = 0
 channel = 1
 mode = 1 #mean,stddev, 1: min,max
+active_mode = "Relu" #Sigmoid,Tanh
 
 #continuous traing or training from scatch
 #training_mode = "test_only" # continuous,test_only
 training_mode = "continuous"
 reset_learning_rate_enable = 0
 reset_learning_rate = 0.00001  #when rerun the epoch, if need to reset the learning rate
-learning_rate_threshold = 0.00001 #not below the value for learning rate
+learning_rate_threshold = 0.001 #not below the value for learning rate
 save_step = 20
 
 #Vriable defines which can be save/restore by saver
@@ -503,35 +517,52 @@ seed = time.time()
 print("random seed is :", seed)
 tf.set_random_seed(seed)
 
-# Store layers weight & bias
+#set weight initialization range for different activate
+weight_init_min = 0.0
+weight_init_max = 2.0  
 
-weights = {
-    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
-    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'h3': tf.Variable(tf.random_normal([n_hidden_2, n_hidden_3])),
-    'out': tf.Variable(tf.random_normal([n_hidden_3, n_output]))
-}
-biases = {
-    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-    'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
-    'out': tf.Variable(tf.random_normal([n_output]))
-}
+#Relu use He weight initialization 
+if active_mode == "Relu": 
+    weights = {
+        'h1': tf.Variable(np.random.randn(n_input,n_hidden_1)/np.sqrt(n_input/2),dtype="float32"),
+        'h2': tf.Variable(np.random.randn(n_hidden_1,n_hidden_2)/np.sqrt(n_hidden_1/2),dtype="float32"),
+        'h3': tf.Variable(np.random.randn(n_hidden_2,n_hidden_3)/np.sqrt(n_hidden_2/2),dtype="float32"),
+        'out': tf.Variable(np.random.randn(n_hidden_3,n_output)/np.sqrt(n_hidden_3/2),dtype="float32")
+    }
+    biases = {
+        'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+        'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+        'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
+        'out': tf.Variable(tf.random_normal([n_output]))
+    }  
+elif active_mode == "Sigmoid": #sqrt(6/(fan_in+fan_out))
+    weights = {
+        'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=-np.sqrt(6/(n_input+n_hidden_1)),maxval=np.sqrt(6/(n_input+n_hidden_1)),dtype=tf.float32)),
+        'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=-np.sqrt(6/(n_hidden_2+n_hidden_1)),maxval=np.sqrt(6/(n_hidden_2+n_hidden_1)),dtype=tf.float32)),
+        'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=-np.sqrt(6/(n_hidden_2+n_hidden_3)),maxval=np.sqrt(6/(n_hidden_2+n_hidden_3)),dtype=tf.float32)),
+        'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-np.sqrt(6/(n_hidden_3+n_output)),maxval=np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
+        }
+    biases = {
+        'b1': tf.Variable(tf.random_uniform([n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
+        'b2': tf.Variable(tf.random_uniform([n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
+        'b3': tf.Variable(tf.random_uniform([n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),                                    
+        'out': tf.Variable(tf.random_uniform([n_output],minval=0,maxval=1.0,dtype=tf.float32))
+    }
+else: #tanh set 4*sqrt(6/(fan_in+fan_out)) 
+     weights = {
+        'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=-4.0*np.sqrt(6/(n_input+n_hidden_1)),maxval=4.0*np.sqrt(6/(n_input+n_hidden_1)),dtype=tf.float32)),
+        'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=-4.0*np.sqrt(6/(n_hidden_2+n_hidden_1)),maxval=4.0*np.sqrt(6/(n_hidden_2+n_hidden_1)),dtype=tf.float32)),
+        'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=-4.0*np.sqrt(6/(n_hidden_2+n_hidden_3)),maxval=4.0*np.sqrt(6/(n_hidden_2+n_hidden_3)),dtype=tf.float32)),
+        'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-4.0*np.sqrt(6/(n_hidden_3+n_output)),maxval=4.0*np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
+        }
+     biases = {
+        'b1': tf.Variable(tf.random_uniform([n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
+        'b2': tf.Variable(tf.random_uniform([n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
+        'b3': tf.Variable(tf.random_uniform([n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),                                    
+        'out': tf.Variable(tf.random_uniform([n_output],minval=0,maxval=1.0,dtype=tf.float32))
+    }
 
-"""
-weights = {
-    'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
-    'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
-    'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),
-    'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=0,maxval=1.0,dtype=tf.float32))
-}
-biases = {
-    'b1': tf.Variable(tf.random_uniform([n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
-    'b2': tf.Variable(tf.random_uniform([n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
-    'b3': tf.Variable(tf.random_uniform([n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),                                    
-    'out': tf.Variable(tf.random_uniform([n_output],minval=0,maxval=1.0,dtype=tf.float32))
-}
-"""
+
 
 # tf Graph input
 x = tf.placeholder("float", [None, n_input])
@@ -546,7 +577,7 @@ result_test = scan_image_directories(test_set_dir)
 result_test = random_image_list(result_test,seed)
 
 # Construct model
-pred = multilayer_perceptron(x, weights, biases)
+pred = multilayer_perceptron(x, weights, biases,active_mode)
 
 # Define loss and optimizer
 cost = tf.nn.l2_loss(pred-y)
