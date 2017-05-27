@@ -543,11 +543,11 @@ elif active_mode == "Sigmoid": #sqrt(6/(fan_in+fan_out))
         'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-np.sqrt(6/(n_hidden_3+n_output)),maxval=np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
         }
     biases = {
-        'b1': tf.Variable(tf.random_uniform([n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
-        'b2': tf.Variable(tf.random_uniform([n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
-        'b3': tf.Variable(tf.random_uniform([n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),                                    
-        'out': tf.Variable(tf.random_uniform([n_output],minval=0,maxval=1.0,dtype=tf.float32))
-    }
+        'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+        'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+        'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
+        'out': tf.Variable(tf.random_normal([n_output]))
+    } 
 else: #tanh set 4*sqrt(6/(fan_in+fan_out)) 
      weights = {
         'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=-4.0*np.sqrt(6/(n_input+n_hidden_1)),maxval=4.0*np.sqrt(6/(n_input+n_hidden_1)),dtype=tf.float32)),
@@ -556,11 +556,11 @@ else: #tanh set 4*sqrt(6/(fan_in+fan_out))
         'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-4.0*np.sqrt(6/(n_hidden_3+n_output)),maxval=4.0*np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
         }
      biases = {
-        'b1': tf.Variable(tf.random_uniform([n_hidden_1],minval=0,maxval=1.0,dtype=tf.float32)),
-        'b2': tf.Variable(tf.random_uniform([n_hidden_2],minval=0,maxval=1.0,dtype=tf.float32)),
-        'b3': tf.Variable(tf.random_uniform([n_hidden_3],minval=0,maxval=1.0,dtype=tf.float32)),                                    
-        'out': tf.Variable(tf.random_uniform([n_output],minval=0,maxval=1.0,dtype=tf.float32))
-    }
+        'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+        'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+        'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
+        'out': tf.Variable(tf.random_normal([n_output]))
+    } 
 
 
 
