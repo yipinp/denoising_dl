@@ -484,22 +484,22 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 20
 learning_ratio = 1.0
-training_epochs = 200
+training_epochs = 100
 batch_size = 100
-num_examples = 20000
+num_examples = 50000
 display_step = 1
 threshold_adjust = 0.90
 early_termination_threshold = 1/100000
 
 # Network Parameters
-n_hidden_1 = 128 # 1st layer number of features
+n_hidden_1 = 256 # 1st layer number of features
 n_hidden_2 = 256 # 2nd layer number of features
 n_hidden_3 = 256 # 3nd layer number of features
 n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
 n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
 prev_cost = 0
 channel = 1
-mode = 1 #mean,stddev, 1: min,max
+mode = 0 #mean,stddev, 1: min,max
 active_mode = "Relu" #Sigmoid,Tanh
 
 #continuous traing or training from scatch
