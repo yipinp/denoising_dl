@@ -22,7 +22,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 import random
 import tensorflow as tf
-import random 
 import time
 from skimage.measure import compare_ssim as ssim
 from skimage.measure import compare_psnr as psnr
@@ -278,6 +277,7 @@ def get_one_image(filename):
     img_origin = cv2.imread(filename)
     global channel
     global mode
+    global theta
     #convert to gray image
     if channel == 1:
         img_origin = cv2.cvtColor(img_origin,cv2.COLOR_BGR2GRAY)
@@ -456,14 +456,14 @@ model_name = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models\
 logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output"
 
-
+"""
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
 img_path = r'/home/pyp/paper/denosing/denoising_dl/output'
 model_path = r'/home/pyp/paper/denosing/denoising_dl/models'
 model_name = r'/home/pyp/paper/denosing/denoising_dl/models/model.ckpt'
 logs_path = r'/home/pyp/paper/denosing/denoising_dl/board'
-
+"""
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -516,6 +516,7 @@ learning_rate = tf.Variable(0.001,dtype="float",name="learning_rate")
 seed = time.time()
 print("random seed is :", seed)
 tf.set_random_seed(seed)
+random.seed(seed)
 
 #set weight initialization range for different activate
 weight_init_min = 0.0
@@ -621,6 +622,10 @@ if training_mode != "test_only":
             avg_cost = 0.
             current_file_id = 0 # reset patch read index
             total_batch = int(num_examples/batch_size)
+            #data augment for theta rotation
+            if epoch != 0 :
+                theta = np.random.uniform(-180,180)
+                print("epoch:",epoch+1," the theta is:",theta)
             # Loop over all batches
             for i in range(total_batch):
                 batch_x, batch_y = next_batch(result,batch_size)
@@ -670,7 +675,9 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         print("Test mode is enabled, load the cp is :",ckpt.model_checkpoint_path)
         saver.restore(sess,ckpt.model_checkpoint_path)
         print("Restore model and learning rate is:",sess.run(learning_rate))
-        
+    
+    #reset theta to zero in test phase
+    theta = 90   
     for i in range(len(result_test)):
         test_image = result_test[i]
         print("test image is:",test_image)
