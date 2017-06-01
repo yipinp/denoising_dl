@@ -482,7 +482,7 @@ current_image_true = None
                   MLP control parameters
 """
 tf.reset_default_graph()
-learning_period = 20
+learning_period = 10
 learning_ratio = 1.0
 training_epochs = 100
 batch_size = 100
@@ -623,7 +623,7 @@ if training_mode != "test_only":
             current_file_id = 0 # reset patch read index
             total_batch = int(num_examples/batch_size)
             #data augment for theta rotation
-            if epoch != 0 :
+            if epoch % learning_period == learning_period - 1 :
                 theta = np.random.uniform(-180,180)
                 print("epoch:",epoch+1," the theta is:",theta)
             # Loop over all batches
@@ -677,7 +677,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         print("Restore model and learning rate is:",sess.run(learning_rate))
     
     #reset theta to zero in test phase
-    theta = 90   
+    theta = 0   
     for i in range(len(result_test)):
         test_image = result_test[i]
         print("test image is:",test_image)
