@@ -391,7 +391,7 @@ def multilayer_perceptron(x, weights, biases,activate):
     layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
     if activate =="Relu":
         layer_1 = tf.nn.relu(layer_1)
-    elif activate =="Sigmid":
+    elif activate =="Sigmoid":
         layer_1 = tf.sigmoid(layer_1)
     else:
         layer_1 = tf.tanh(layer_1)
@@ -400,7 +400,7 @@ def multilayer_perceptron(x, weights, biases,activate):
     layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
     if activate =="Relu":
         layer_2 = tf.nn.relu(layer_2)
-    elif activate =="Sigmid":
+    elif activate =="Sigmoid":
         layer_2 = tf.sigmoid(layer_2)
     else:
         layer_2 = tf.tanh(layer_2)
@@ -409,7 +409,7 @@ def multilayer_perceptron(x, weights, biases,activate):
     layer_3 = tf.add(tf.matmul(layer_2, weights['h3']), biases['b3'])
     if activate =="Relu":
         layer_3 = tf.nn.relu(layer_3)
-    elif activate =="Sigmid":
+    elif activate =="Sigmoid":
         layer_3 = tf.sigmoid(layer_3)
     else:
         layer_3 = tf.tanh(layer_3)
@@ -418,6 +418,51 @@ def multilayer_perceptron(x, weights, biases,activate):
     out_layer = tf.matmul(layer_3, weights['out']) + biases['out']
                      
     return out_layer
+    
+    
+    
+# Create some wrappers for simplicity
+def conv2d(x, W, b, strides=1):
+    # Conv2D wrapper, with bias and relu activation
+    x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
+    x = tf.nn.bias_add(x, b)
+    return tf.nn.relu(x)
+
+
+def maxpool2d(x, k=2):
+    # MaxPool2D wrapper
+    return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],
+                          padding='SAME')
+
+
+# Create model
+def conv_net(x, weights, biases, dropout):
+    # Reshape input picture
+    x = tf.reshape(x, shape=[-1, 28, 28, 1])
+
+    # Convolution Layer
+    conv1 = conv2d(x, weights['h1'], biases['b1'])
+    # Max Pooling (down-sampling)
+    conv1 = maxpool2d(conv1, k=2)
+
+    # Convolution Layer
+    conv2 = conv2d(conv1, weights['h2'], biases['b2'])
+    # Max Pooling (down-sampling)
+    conv2 = maxpool2d(conv2, k=2)
+
+
+    # Fully connected layer
+    # Reshape conv2 output to fit fully connected layer input
+    fc1 = tf.reshape(conv2, [-1, weights['h3'].get_shape().as_list()[0]])
+    fc1 = tf.add(tf.matmul(fc1, weights['h3']), biases['b3'])
+    fc1 = tf.nn.relu(fc1)
+    # Apply Dropout
+    fc1 = tf.nn.dropout(fc1, dropout)
+
+    # Output, class prediction
+    out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
+    return out
+
        
 """
         User defined parameter
@@ -440,10 +485,6 @@ noise_mean = 0.0
 noise_sigma  = 20.0
 salt_percent = 0.0
 
-#patch parameters
-patch_size = (14,14)
-patch_stride = 7
-
 #board
 
 
@@ -456,14 +497,14 @@ model_name = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models\
 logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output"
 
-"""
+
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
 img_path = r'/home/pyp/paper/denosing/denoising_dl/output'
 model_path = r'/home/pyp/paper/denosing/denoising_dl/models'
 model_name = r'/home/pyp/paper/denosing/denoising_dl/models/model.ckpt'
 logs_path = r'/home/pyp/paper/denosing/denoising_dl/board'
-"""
+
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -485,34 +526,108 @@ tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 1.0
 training_epochs = 100
-batch_size = 100
-num_examples = 50000
+batch_size = 16
+num_examples = 5000
 display_step = 1
 threshold_adjust = 0.90
 early_termination_threshold = 1/100000
-
-# Network Parameters
-n_hidden_1 = 256 # 1st layer number of features
-n_hidden_2 = 256 # 2nd layer number of features
-n_hidden_3 = 256 # 3nd layer number of features
-n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
-n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
-prev_cost = 0
-channel = 1
 mode = 0 #mean,stddev, 1: min,max
-active_mode = "Relu" #Sigmoid,Tanh
-
 #continuous traing or training from scatch
 #training_mode = "test_only" # continuous,test_only
-training_mode = "continuous"
+training_mode = "continuou"
 reset_learning_rate_enable = 0
 reset_learning_rate = 0.00001  #when rerun the epoch, if need to reset the learning rate
 learning_rate_threshold = 0.001 #not below the value for learning rate
+channel = 1
 save_step = 20
+prev_cost = 0
+network = "CNN" #CNN
+
+#patch parameters
+
+if network == "MLP" :
+    patch_size = (14,14)
+    patch_stride = 7
+    n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
+    n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
+    # Network Parameters
+    n_hidden_1 = 256 # 1st layer number of features
+    n_hidden_2 = 256 # 2nd layer number of features
+    n_hidden_3 = 256 # 3nd layer number of features
+    
+    active_mode = "Relu" #Sigmoid,Tanh
+    #Relu use He weight initialization 
+    if active_mode == "Relu": 
+        weights = {
+            'h1': tf.Variable(np.random.randn(n_input,n_hidden_1)/np.sqrt(n_input/2),dtype="float32"),
+            'h2': tf.Variable(np.random.randn(n_hidden_1,n_hidden_2)/np.sqrt(n_hidden_1/2),dtype="float32"),
+            'h3': tf.Variable(np.random.randn(n_hidden_2,n_hidden_3)/np.sqrt(n_hidden_2/2),dtype="float32"),
+            'out': tf.Variable(np.random.randn(n_hidden_3,n_output)/np.sqrt(n_hidden_3/2),dtype="float32")
+            }
+        biases = {
+            'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+            'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+            'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
+            'out': tf.Variable(tf.random_normal([n_output]))
+        }  
+    elif active_mode == "Sigmoid": #sqrt(6/(fan_in+fan_out))
+        weights = {
+            'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=-np.sqrt(6/(n_input+n_hidden_1)),maxval=np.sqrt(6/(n_input+n_hidden_1)),dtype=tf.float32)),
+            'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=-np.sqrt(6/(n_hidden_2+n_hidden_1)),maxval=np.sqrt(6/(n_hidden_2+n_hidden_1)),dtype=tf.float32)),
+            'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=-np.sqrt(6/(n_hidden_2+n_hidden_3)),maxval=np.sqrt(6/(n_hidden_2+n_hidden_3)),dtype=tf.float32)),
+            'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-np.sqrt(6/(n_hidden_3+n_output)),maxval=np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
+            }
+        biases = {
+            'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+            'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+            'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
+            'out': tf.Variable(tf.random_normal([n_output]))
+        } 
+    else: #tanh set 4*sqrt(6/(fan_in+fan_out)) 
+        weights = {
+            'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=-4.0*np.sqrt(6/(n_input+n_hidden_1)),maxval=4.0*np.sqrt(6/(n_input+n_hidden_1)),dtype=tf.float32)),
+            'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=-4.0*np.sqrt(6/(n_hidden_2+n_hidden_1)),maxval=4.0*np.sqrt(6/(n_hidden_2+n_hidden_1)),dtype=tf.float32)),
+            'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=-4.0*np.sqrt(6/(n_hidden_2+n_hidden_3)),maxval=4.0*np.sqrt(6/(n_hidden_2+n_hidden_3)),dtype=tf.float32)),
+            'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-4.0*np.sqrt(6/(n_hidden_3+n_output)),maxval=4.0*np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
+        }
+        biases = {
+            'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+            'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+            'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
+            'out': tf.Variable(tf.random_normal([n_output]))
+        } 
+elif network == "CNN":
+    patch_size = (28,28)
+    patch_stride = 14
+    n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
+    n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
+    dropout = 0.5 # Dropout, probability to keep units
+    weights = {
+        # 5x5 conv, 1 input, 32 outputs
+        'h1': tf.Variable(tf.random_normal([5, 5, 1, 32])),
+        # 5x5 conv, 32 inputs, 64 outputs
+        'h2': tf.Variable(tf.random_normal([5, 5, 32, 64])),
+        # fully connected, 7*7*64 inputs, 1024 outputs
+        'h3': tf.Variable(tf.random_normal([7*7*64, 1024])),
+        # 1024 inputs, 10 outputs (class prediction)
+        'out': tf.Variable(tf.random_normal([1024, n_output]))
+     }
+
+    biases = {
+        'b1': tf.Variable(tf.random_normal([32])),
+        'b2': tf.Variable(tf.random_normal([64])),
+        'b3': tf.Variable(tf.random_normal([1024])),
+        'out': tf.Variable(tf.random_normal([n_output]))
+    }   
+    
+
+
+
+
 
 #Vriable defines which can be save/restore by saver
 learning_rate = tf.Variable(0.001,dtype="float",name="learning_rate")
-
+    
 seed = time.time()
 print("random seed is :", seed)
 tf.set_random_seed(seed)
@@ -522,52 +637,11 @@ random.seed(seed)
 weight_init_min = 0.0
 weight_init_max = 2.0  
 
-#Relu use He weight initialization 
-if active_mode == "Relu": 
-    weights = {
-        'h1': tf.Variable(np.random.randn(n_input,n_hidden_1)/np.sqrt(n_input/2),dtype="float32"),
-        'h2': tf.Variable(np.random.randn(n_hidden_1,n_hidden_2)/np.sqrt(n_hidden_1/2),dtype="float32"),
-        'h3': tf.Variable(np.random.randn(n_hidden_2,n_hidden_3)/np.sqrt(n_hidden_2/2),dtype="float32"),
-        'out': tf.Variable(np.random.randn(n_hidden_3,n_output)/np.sqrt(n_hidden_3/2),dtype="float32")
-    }
-    biases = {
-        'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-        'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-        'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
-        'out': tf.Variable(tf.random_normal([n_output]))
-    }  
-elif active_mode == "Sigmoid": #sqrt(6/(fan_in+fan_out))
-    weights = {
-        'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=-np.sqrt(6/(n_input+n_hidden_1)),maxval=np.sqrt(6/(n_input+n_hidden_1)),dtype=tf.float32)),
-        'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=-np.sqrt(6/(n_hidden_2+n_hidden_1)),maxval=np.sqrt(6/(n_hidden_2+n_hidden_1)),dtype=tf.float32)),
-        'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=-np.sqrt(6/(n_hidden_2+n_hidden_3)),maxval=np.sqrt(6/(n_hidden_2+n_hidden_3)),dtype=tf.float32)),
-        'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-np.sqrt(6/(n_hidden_3+n_output)),maxval=np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
-        }
-    biases = {
-        'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-        'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-        'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
-        'out': tf.Variable(tf.random_normal([n_output]))
-    } 
-else: #tanh set 4*sqrt(6/(fan_in+fan_out)) 
-     weights = {
-        'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1],minval=-4.0*np.sqrt(6/(n_input+n_hidden_1)),maxval=4.0*np.sqrt(6/(n_input+n_hidden_1)),dtype=tf.float32)),
-        'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2],minval=-4.0*np.sqrt(6/(n_hidden_2+n_hidden_1)),maxval=4.0*np.sqrt(6/(n_hidden_2+n_hidden_1)),dtype=tf.float32)),
-        'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3],minval=-4.0*np.sqrt(6/(n_hidden_2+n_hidden_3)),maxval=4.0*np.sqrt(6/(n_hidden_2+n_hidden_3)),dtype=tf.float32)),
-        'out': tf.Variable(tf.random_uniform([n_hidden_3, n_output],minval=-4.0*np.sqrt(6/(n_hidden_3+n_output)),maxval=4.0*np.sqrt(6/(n_hidden_3+n_output)),dtype=tf.float32))
-        }
-     biases = {
-        'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-        'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-        'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
-        'out': tf.Variable(tf.random_normal([n_output]))
-    } 
-
-
 
 # tf Graph input
 x = tf.placeholder("float", [None, n_input])
 y = tf.placeholder("float", [None, n_output])
+keep_prob = tf.placeholder(tf.float32) #dropout (keep probability)
 #lrate = tf.placeholder("float",[1])
 
 #test program         
@@ -578,8 +652,10 @@ result_test = scan_image_directories(test_set_dir)
 result_test = random_image_list(result_test,seed)
 
 # Construct model
-pred = multilayer_perceptron(x, weights, biases,active_mode)
-
+if network == "MLP":
+    pred = multilayer_perceptron(x, weights, biases,active_mode)
+elif network == "CNN":
+    pred = conv_net(x, weights, biases, keep_prob)
 # Define loss and optimizer
 cost = tf.nn.l2_loss(pred-y)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
@@ -617,7 +693,7 @@ if training_mode != "test_only":
                     sess.run(tf.assign(learning_rate,reset_learning_rate))
                     
         # Training cycle
-                
+        print("Start training!")        
         for epoch in range(training_epochs):
             avg_cost = 0.
             current_file_id = 0 # reset patch read index
@@ -633,9 +709,16 @@ if training_mode != "test_only":
                 if batch_y is None:
                     break
                 # Run optimization op (backprop) and cost op (to get loss value)
-                _, c,summary = sess.run([optimizer, cost,merged_summary_op], feed_dict={x: batch_x,
+                if network == "MLP":
+                    _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y
                                                           })
+                elif network == "CNN":
+                    _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
+                                                          y: batch_y,keep_prob:dropout
+                                                          })
+                                     
+                    
                #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
                # Compute average loss
                 summary_writer.add_summary(summary,epoch*total_batch+i)
@@ -684,7 +767,10 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         patch_current_y = 0
         patch_current_x = 0
         batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
-        patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
+        if network == "MLP":
+            patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
+        elif network == "CNN":
+            patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,keep_prob: 1.})
         #print(patch_recover)
         print("Test phase: cost = ", cost_test/patch_num)
         #print("Test weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))
