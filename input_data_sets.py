@@ -602,15 +602,16 @@ elif network == "CNN":
     n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
     n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
     dropout = 0.5 # Dropout, probability to keep units
+    W_init = tf.contrib.layers.xavier_initializer_conv2d()      
     weights = {
         # 5x5 conv, 1 input, 32 outputs
-        'h1': tf.Variable(tf.random_normal([5, 5, 1, 32])),
+        'h1': tf.get_variable('h1', [5, 5, 1, 32], initializer=W_init),
         # 5x5 conv, 32 inputs, 64 outputs
-        'h2': tf.Variable(tf.random_normal([5, 5, 32, 64])),
+        'h2': tf.get_variable('h2', [5, 5, 32, 64], initializer=W_init),
         # fully connected, 7*7*64 inputs, 1024 outputs
-        'h3': tf.Variable(tf.random_normal([7*7*64, 1024])),
+        'h3': tf.get_variable('h3', [7*7*64, 1024], initializer=W_init),
         # 1024 inputs, 10 outputs (class prediction)
-        'out': tf.Variable(tf.random_normal([1024, n_output]))
+        'out': tf.get_variable('out', [1024, n_output], initializer=W_init)
      }
 
     biases = {
