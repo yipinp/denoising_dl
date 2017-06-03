@@ -526,8 +526,8 @@ tf.reset_default_graph()
 learning_period = 10
 learning_ratio = 1.0
 training_epochs = 100
-batch_size = 16
-num_examples = 5000
+batch_size = 128
+num_examples = 50000
 display_step = 1
 threshold_adjust = 0.90
 early_termination_threshold = 1/100000
