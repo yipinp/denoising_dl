@@ -428,7 +428,7 @@ def conv2d(x, W, b, strides=1):
     x = tf.nn.bias_add(x, b)
     return tf.nn.relu(x)
 
-def conv2d_batch(x, W, b, beta,scale,epsilon,strides=1):
+def conv2d_batch(x, W, b, beta,scale,strides=1):
     # Conv2D wrapper, with bias and relu activation
     x = tf.nn.conv2d(x, W, strides=[1, strides,strides, 1], padding='SAME')
     x = tf.nn.bias_add(x, b)
@@ -485,14 +485,17 @@ def conv_net_batch(x, weights, biases):
     # Max Pooling (down-sampling)
     conv2 = maxpool2d(conv2, k=2)
 
-
     # Fully connected layer
     # Reshape conv2 output to fit fully connected layer input
     fc1 = tf.reshape(conv2, [-1, weights['h3'].get_shape().as_list()[0]])
     fc1 = tf.add(tf.matmul(fc1, weights['h3']), biases['b3'])
+    print(fc1.shape)
     batch_mean, batch_var = tf.nn.moments(fc1,[0])
-    fc1 = tf.nn.batch_normalization(x,batch_mean,batchN_beta['b3'],batchN_scale['b3'],1e-3)
+    fc1 = tf.nn.batch_normalization(x,batch_mean,batch_var,batchN_beta['b3'],batchN_scale['b3'],1e-3)
+    print(fc1.shape)
+    fc1 = tf.reshape(fc1, [-1, weights['out'].get_shape().as_list()[0]])
     fc1 = tf.nn.relu(fc1)
+    print(fc1.shape)
     # Output, class prediction
     out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
     return out
@@ -575,7 +578,7 @@ learning_rate_threshold = 0.001 #not below the value for learning rate
 channel = 1
 save_step = 20
 prev_cost = 0
-network = "CNN"
+network = "CNNBATCH"
 
 #patch parameters
 
@@ -681,15 +684,15 @@ elif network == "CNNBATCH":
     }          
     
     batchN_scale = {
-        'b1': tf.Variable(tf.ones[n_hidden_1]),
-        'b2': tf.Variable(tf.ones[n_hidden_2]),
-        'b3': tf.Variable(tf.ones[n_hidden_3])
+        'b1': tf.Variable(tf.ones([32])),
+        'b2': tf.Variable(tf.ones([64])),
+        'b3': tf.Variable(tf.ones([1024]))
      }
 
     batchN_beta = {
-        'b1': tf.Variable(tf.ones[n_hidden_1]),
-        'b2': tf.Variable(tf.ones[n_hidden_2]),
-        'b3': tf.Variable(tf.ones[n_hidden_3])
+        'b1': tf.Variable(tf.ones([32])),
+        'b2': tf.Variable(tf.ones([64])),
+        'b3': tf.Variable(tf.ones([1024]))
      }
 
 
