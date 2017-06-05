@@ -428,7 +428,14 @@ def conv2d(x, W, b, strides=1):
     x = tf.nn.bias_add(x, b)
     return tf.nn.relu(x)
 
-
+def conv2d_batch(x, W, b, beta,scale,epsilon,strides=1):
+    # Conv2D wrapper, with bias and relu activation
+    x = tf.nn.conv2d(x, W, strides=[1, strides,strides, 1], padding='SAME')
+    x = tf.nn.bias_add(x, b)
+    batch_mean, batch_var = tf.nn.moments(x,[0])
+    x = tf.nn.batch_normalization(x,batch_mean,batch_var,beta,scale,1e-3)
+    return tf.nn.relu(x)
+    
 def maxpool2d(x, k=2):
     # MaxPool2D wrapper
     return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],
@@ -459,6 +466,33 @@ def conv_net(x, weights, biases, dropout):
     # Apply Dropout
     fc1 = tf.nn.dropout(fc1, dropout)
 
+    # Output, class prediction
+    out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
+    return out
+    
+    
+def conv_net_batch(x, weights, biases):
+    # Reshape input picture
+    x = tf.reshape(x, shape=[-1, 28, 28, 1])
+
+    # Convolution Layer
+    conv1 = conv2d_batch(x, weights['h1'], biases['b1'],batchN_beta['b1'],batchN_scale['b1'])
+    # Max Pooling (down-sampling)
+    conv1 = maxpool2d(conv1, k=2)
+
+    # Convolution Layer
+    conv2 = conv2d_batch(conv1, weights['h2'], biases['b2'],batchN_beta['b2'],batchN_scale['b2'])
+    # Max Pooling (down-sampling)
+    conv2 = maxpool2d(conv2, k=2)
+
+
+    # Fully connected layer
+    # Reshape conv2 output to fit fully connected layer input
+    fc1 = tf.reshape(conv2, [-1, weights['h3'].get_shape().as_list()[0]])
+    fc1 = tf.add(tf.matmul(fc1, weights['h3']), biases['b3'])
+    batch_mean, batch_var = tf.nn.moments(fc1,[0])
+    fc1 = tf.nn.batch_normalization(x,batch_mean,batchN_beta['b3'],batchN_scale['b3'],1e-3)
+    fc1 = tf.nn.relu(fc1)
     # Output, class prediction
     out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
     return out
@@ -497,14 +531,14 @@ model_name = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models\
 logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output"
 
-
+"""
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
 img_path = r'/home/pyp/paper/denosing/denoising_dl/output'
 model_path = r'/home/pyp/paper/denosing/denoising_dl/models'
 model_name = r'/home/pyp/paper/denosing/denoising_dl/models/model.ckpt'
 logs_path = r'/home/pyp/paper/denosing/denoising_dl/board'
-
+"""
 #random training sets
 seed = 0    #fixed order with fixed seed 
 
@@ -541,7 +575,7 @@ learning_rate_threshold = 0.001 #not below the value for learning rate
 channel = 1
 save_step = 20
 prev_cost = 0
-network = "CNN" #CNN
+network = "CNN"
 
 #patch parameters
 
@@ -619,11 +653,44 @@ elif network == "CNN":
         'b2': tf.Variable(tf.random_normal([64])),
         'b3': tf.Variable(tf.random_normal([1024])),
         'out': tf.Variable(tf.random_normal([n_output]))
-    }   
+    }  
+
+elif network == "CNNBATCH":
+    patch_size = (28,28)
+    patch_stride = 14
+    n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
+    n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
+    dropout = 0.5 # Dropout, probability to keep units
+    W_init = tf.contrib.layers.xavier_initializer_conv2d()      
+    weights = {
+        # 5x5 conv, 1 input, 32 outputs
+        'h1': tf.Variable(tf.random_normal([5, 5, 1, 32])),
+        # 5x5 conv, 32 inputs, 64 outputs
+        'h2': tf.Variable(tf.random_normal([5, 5, 32, 64])),
+        # fully connected, 7*7*64 inputs, 1024 outputs
+        'h3': tf.Variable(tf.random_normal([7*7*64, 1024])),
+        # 1024 inputs, 10 outputs (class prediction)
+        'out': tf.Variable(tf.random_normal([1024, n_output]))
+     }
+
+    biases = {
+        'b1': tf.Variable(tf.random_normal([32])),
+        'b2': tf.Variable(tf.random_normal([64])),
+        'b3': tf.Variable(tf.random_normal([1024])),
+        'out': tf.Variable(tf.random_normal([n_output]))
+    }          
     
+    batchN_scale = {
+        'b1': tf.Variable(tf.ones[n_hidden_1]),
+        'b2': tf.Variable(tf.ones[n_hidden_2]),
+        'b3': tf.Variable(tf.ones[n_hidden_3])
+     }
 
-
-
+    batchN_beta = {
+        'b1': tf.Variable(tf.ones[n_hidden_1]),
+        'b2': tf.Variable(tf.ones[n_hidden_2]),
+        'b3': tf.Variable(tf.ones[n_hidden_3])
+     }
 
 
 #Vriable defines which can be save/restore by saver
@@ -657,6 +724,9 @@ if network == "MLP":
     pred = multilayer_perceptron(x, weights, biases,active_mode)
 elif network == "CNN":
     pred = conv_net(x, weights, biases, keep_prob)
+elif network == "CNNBATCH":
+    pred = conv_net_batch(x, weights, biases)
+    
 # Define loss and optimizer
 cost = tf.nn.l2_loss(pred-y)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
@@ -710,15 +780,14 @@ if training_mode != "test_only":
                 if batch_y is None:
                     break
                 # Run optimization op (backprop) and cost op (to get loss value)
-                if network == "MLP":
+                if network == "MLP"or network == "CNNBATCH":
                     _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y
                                                           })
                 elif network == "CNN":
                     _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y,keep_prob:dropout
-                                                          })
-                                     
+                                                          })                   
                     
                #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
                # Compute average loss
@@ -768,7 +837,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         patch_current_y = 0
         patch_current_x = 0
         batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
-        if network == "MLP":
+        if network == "MLP" or network == "CNNBATCH":
             patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y})
         elif network == "CNN":
             patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,keep_prob: 1.})
