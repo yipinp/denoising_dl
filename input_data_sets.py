@@ -562,11 +562,11 @@ current_image_true = None
                   MLP control parameters
 """
 tf.reset_default_graph()
-learning_period = 10
+learning_period = 30
 learning_ratio = 1.0
-training_epochs = 100
+training_epochs = 60
 batch_size = 128
-num_examples = 50000
+num_examples = 20000
 display_step = 1
 threshold_adjust = 0.90
 early_termination_threshold = 1/100000
@@ -635,7 +635,7 @@ if network == "MLP" :
             'b3': tf.Variable(tf.random_normal([n_hidden_3])),                                    
             'out': tf.Variable(tf.random_normal([n_output]))
         } 
-elif network == "CNN":
+elif network == "CNN" or network == "CNNBATCH": #with good weight initialization and batch normalization layer
     patch_size = (28,28)
     patch_stride = 14
     n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
@@ -660,11 +660,12 @@ elif network == "CNN":
         'out': tf.Variable(tf.random_normal([n_output]))
     }  
 
-elif network == "CNNBATCH":
+elif network == "CNNBATCH1": #no good weight optimization with batch normalization layer
     patch_size = (28,28)
     patch_stride = 14
     n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
     n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)   
+    
     weights = {
         # 5x5 conv, 1 input, 32 outputs
         'h1': tf.Variable(tf.random_normal([5, 5, 1, 32])),
