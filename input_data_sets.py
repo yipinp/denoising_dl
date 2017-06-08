@@ -494,8 +494,8 @@ def conv_net_batch(x, weights, biases,phase):
     
     fc1 = tf.contrib.layers.batch_norm(fc1, 
                                        center=True, scale=True, 
-                                       is_training=phase,
-                                       scope='bn')
+                                       is_training=phase
+                                     )
     fc1 = tf.reshape(fc1, [-1, weights['out'].get_shape().as_list()[0]])
     fc1 = tf.nn.relu(fc1)
     # Output, class prediction
@@ -698,7 +698,7 @@ elif network == "CNNBATCH1": #no good weight optimization with batch normalizati
 
 
 #Vriable defines which can be save/restore by saver
-learning_rate = tf.Variable(0.001,dtype="float",name="learning_rate")
+learning_rate = tf.Variable(0.01,dtype="float",name="learning_rate")
     
 seed = time.time()
 print("random seed is :", seed)
@@ -734,7 +734,9 @@ elif network == "CNNBATCH":
     
 # Define loss and optimizer
 cost = tf.nn.l2_loss(pred-y)
-optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+with tf.control_dependencies(update_ops):
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 #optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(cost)
 # Initializing the variables
 init = tf.global_variables_initializer()
