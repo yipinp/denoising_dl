@@ -90,7 +90,21 @@ function [PSNR, y_est] = BM3D(y, z, sigma, profile, print_to_screen)
 %%%%
 image_name = [
 %     'montage.png'
-     'output0_noise.jpg'
+     'output1_golden.jpg'
+%     'boat.png'
+%     'Lena512.png'
+%     'house.png'
+%     'barbara.png'
+%     'peppers256.png'
+%     'fingerprint.png'
+%     'couple.png'
+%     'hill.png'
+%     'man.png'
+    ];
+
+image_noise_name = [
+%     'montage.png'
+     'output1_noise.jpg'
 %     'boat.png'
 %     'Lena512.png'
 %     'house.png'
@@ -124,8 +138,12 @@ end
 %%%%  Specify the std. dev. of the corrupting noise
 %%%%
 if (exist('sigma') ~= 1),
-    sigma               = 25; %% default standard deviation of the AWGN
+    sigma               = 20; %% default standard deviation of the AWGN
 end
+
+
+y        = im2double(imread(image_name));
+z        = im2double(imread(image_noise_name));
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% Following are the parameters for the Normal Profile.
@@ -296,7 +314,7 @@ if (exist('y') ~= 1) | (exist('z') ~= 1)
     z        = y + (sigma/255)*randn(size(y)); %% create a noisy image
 else  % external images
     
-    image_name = 'External image';
+    %image_name = 'External image';
     
     % convert z to double precision if needed
     z = double(z);
@@ -368,6 +386,9 @@ PSNR = 0; %% Remains 0 if the true image y is not available
 if (~y_is_invalid_image), % checks if y is a valid image
     PSNR = 10*log10(1/mean((y(:)-y_est(:)).^2)); % y is valid
 end
+
+%write y_est as JPG
+imwrite(y_est,'bm3d_denoise.jpg')
 
 if dump_output_information == 1,
     fprintf('FINAL ESTIMATE (total time: %.1f sec), PSNR: %.2f dB\n', ...
