@@ -39,6 +39,9 @@ def scan_image_directories(directory_path):
     for root,dirs,files in os.walk(directory_path):
         for filename in files:
             print(os.path.join(root,filename))
+            #check filename for jpg,jpeg,png only
+            if(os.path.splitext(filename)[1] != ".jpg" and os.path.splitext(filename)[1] != ".jpeg" and os.path.splitext(filename)[1] != ".png"):
+                continue
             result.append(os.path.join(root,filename))
     return result
     
@@ -535,7 +538,7 @@ model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models"
 model_name = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models\model.ckpt"
 logs_path = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\board'
 img_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output"
-
+log_file  = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\output.log"
 """
 training_set_dir = r'/home/pyp/paper/denosing/denoising_dl/training_data' 
 test_set_dir = r'/home/pyp/paper/denosing/denoising_dl/test_data' 
@@ -543,6 +546,7 @@ img_path = r'/home/pyp/paper/denosing/denoising_dl/output'
 model_path = r'/home/pyp/paper/denosing/denoising_dl/models'
 model_name = r'/home/pyp/paper/denosing/denoising_dl/models/model.ckpt'
 logs_path = r'/home/pyp/paper/denosing/denoising_dl/board'
+log_file  = r'/home/pyp/paper/denosing/denoising_dl/output.log'
 """
 #random training sets
 seed = 0    #fixed order with fixed seed 
@@ -564,7 +568,7 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 30
 learning_ratio = 1.0
-training_epochs = 60
+training_epochs = 3
 batch_size = 128
 num_examples = 20000
 display_step = 1
@@ -755,6 +759,7 @@ tf.summary.histogram("biasout",biases['out'])
 tf.summary.scalar("loss",cost)
 merged_summary_op = tf.summary.merge_all()
 
+f_log = open(log_file,"w")
 
 # Launch the graph for training phase
 if training_mode != "test_only":
@@ -841,6 +846,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     for i in range(len(result_test)):
         test_image = result_test[i]
         print("test image is:",test_image)
+        f_log.write("test image is %s\n" %(test_image))
         patch_current_y = 0
         patch_current_x = 0
         batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
@@ -850,6 +856,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
             patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,keep_prob: 1.})
         #print(patch_recover)
         print("Test phase: cost = ", cost_test/patch_num)
+        f_log.write("Test phase: cost = %f" %(cost_test/patch_num))
         #print("Test weights out :",sess.run(weights['out']), "bias out:",sess.run(biases['out']))
         #print(sess.run(tf.reduce_max(patch_recover)),sess.run(tf.reduce_max(weights['h1'])))
         frame_denoise = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,patch_recover)
@@ -857,12 +864,15 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         frame_noise = image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_x)
         frame_noise = image_renorm(frame_noise,p0,p1,mode)
         golden_image = get_golden_image_show(test_image)
-        #print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
-        plt.subplot(1,2,1)       
-        plt.imshow(frame_denoise,cmap='gray')
+        
+        #Call BM3D as the denoise reference
+        
         cv2.imwrite(img_path+str(i)+".jpg",frame_denoise)
         cv2.imwrite(img_path+str(i)+"_golden.jpg",golden_image)        
         cv2.imwrite(img_path+str(i)+"_noise.jpg",frame_noise)
+        #print("the real frame cost:",sess.run(tf.nn.l2_loss(frame-golden_image)))
+        plt.subplot(1,2,1)       
+        plt.imshow(frame_denoise,cmap='gray')
         plt.subplot(1,2,2)
         plt.imshow(golden_image,cmap='gray')
         plt.show()
@@ -874,5 +884,5 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         denoise_ssim = evaluate_image("SSIM",golden_image.astype(np.uint8),frame_denoise.astype(np.uint8))
         print("After denoising, the psnr is from %f to %f, ssim from %f to %f :" %(noise_psnr,denoise_psnr,noise_ssim,denoise_ssim))
 
-
+    f_log.close()
 
