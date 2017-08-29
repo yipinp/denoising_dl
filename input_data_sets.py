@@ -25,6 +25,7 @@ import tensorflow as tf
 import time
 from skimage.measure import compare_ssim as ssim
 from skimage.measure import compare_psnr as psnr
+from sklearn import preprocessing
 
 #from tflearn.layers.core import input_data,dropout,fully_connected
 #from tflearn.layers.conv import conv2d,max_pool_2d
@@ -166,6 +167,7 @@ def get_normal_param(imageIn,mode):
        return dmin,dmax 
     
 def image_normalization(imgIn,p0,p1,mode):
+   # return preprocessing.scale(imgIn)  
     if mode == 0:
         #img_norm = (imgIn/255.0 - 0.5)*0.2;
         img_norm = (imgIn - p0)/p1
@@ -207,7 +209,7 @@ def next_batch(result,batch_num):
     
     if current_file_id >= len(result):
         current_file_id = 0   #reload training set if finished
-        print("All training set is finished, need to reset and shuffle the training set now!")
+       # print("All training set is finished, need to reset and shuffle the training set now!")
         random.shuffle(result)
         
     if current_x == 0 and current_y == 0 and current_file_id < len(result):
@@ -501,6 +503,8 @@ def conv_net_batch(x, weights, biases,phase):
                                      )
     fc1 = tf.reshape(fc1, [-1, weights['out'].get_shape().as_list()[0]])
     fc1 = tf.nn.relu(fc1)
+    
+    fc1 = tf.nn.dropout(fc1, dropout)
     # Output, class prediction
     out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
     return out
@@ -531,8 +535,10 @@ salt_percent = 0.0
 
 
 #image scan directory setting
-training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\training_data_set'
-test_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
+#training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\training_data_set'
+#test_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\test_data_set'
+training_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\overfit'
+test_set_dir = r'C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\datasets\overfit'
 current_file_id = 0
 model_path = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models"
 model_name = r"C:\Nvidia\my_library\visualSearch\TNR\github\denoising_dl\models\model.ckpt"
@@ -568,9 +574,9 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 30
 learning_ratio = 1.0
-training_epochs = 3
+training_epochs = 300
 batch_size = 128
-num_examples = 20000
+num_examples = 2000
 display_step = 1
 threshold_adjust = 0.90
 early_termination_threshold = 1/100000
@@ -590,14 +596,14 @@ network = "CNNBATCH"
 
 if network == "MLP" :
     patch_size = (14,14)
-    patch_stride = 7
+    patch_stride = 14
     n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
     n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28)
     # Network Parameters
     n_hidden_1 = 256 # 1st layer number of features
     n_hidden_2 = 256 # 2nd layer number of features
     n_hidden_3 = 256 # 3nd layer number of features
-    
+    dropout = 0.000001 # Dropout, probability to keep units
     active_mode = "Relu" #Sigmoid,Tanh
     #Relu use He weight initialization 
     if active_mode == "Relu": 
@@ -733,7 +739,7 @@ if network == "MLP":
     pred = multilayer_perceptron(x, weights, biases,active_mode)
 elif network == "CNN":
     pred = conv_net(x, weights, biases, keep_prob)
-elif network == "CNNBATCH":
+elif network == "CNNBATCH" or network == "CNNBATCH1":
     pred = conv_net_batch(x, weights, biases,phase)
     
 # Define loss and optimizer
@@ -741,21 +747,21 @@ cost = tf.nn.l2_loss(pred-y)
 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 with tf.control_dependencies(update_ops):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-#optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(cost)
+    #optimizer = tf.train.GradientDescentOptimizer(0.01).minimize(cost)
 # Initializing the variables
 init = tf.global_variables_initializer()
 #init = tf.initialize_all_variables()
 saver = tf.train.Saver()
 
 #tensorboard
-tf.summary.histogram("weight1",weights['h1'])
-tf.summary.histogram("weight2",weights['h2'])
-tf.summary.histogram("weight3",weights['h3'])
-tf.summary.histogram("weightout",weights['out'])
-tf.summary.histogram("bias1",biases['b1'])
-tf.summary.histogram("bias2",biases['b2'])
-tf.summary.histogram("bias3",biases['b3'])
-tf.summary.histogram("biasout",biases['out'])
+#tf.summary.histogram("weight1",weights['h1'])
+#tf.summary.histogram("weight2",weights['h2'])
+#tf.summary.histogram("weight3",weights['h3'])
+#tf.summary.histogram("weightout",weights['out'])
+#tf.summary.histogram("bias1",biases['b1'])
+#tf.summary.histogram("bias2",biases['b2'])
+#tf.summary.histogram("bias3",biases['b3'])
+#tf.summary.histogram("biasout",biases['out'])
 tf.summary.scalar("loss",cost)
 merged_summary_op = tf.summary.merge_all()
 
@@ -783,7 +789,7 @@ if training_mode != "test_only":
             total_batch = int(num_examples/batch_size)
             #data augment for theta rotation
             if epoch % learning_period == learning_period - 1 :
-                theta = np.random.uniform(-180,180)
+              #  theta = np.random.uniform(-180,180)
                 print("epoch:",epoch+1," the theta is:",theta)
             # Loop over all batches
             for i in range(total_batch):
@@ -792,9 +798,9 @@ if training_mode != "test_only":
                 if batch_y is None:
                     break
                 # Run optimization op (backprop) and cost op (to get loss value)
-                if network == "MLP" or network == "CNNBATCH":
+                if network == "MLP" or network == "CNNBATCH" or network == "CNNBATCH1":
                     _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
-                                                          y: batch_y,phase:True
+                                                          y: batch_y,phase:True,keep_prob:dropout
                                                           })
                 elif network == "CNN":
                     _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
@@ -851,7 +857,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         patch_current_x = 0
         batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
         if network == "MLP" or network == "CNNBATCH":
-            patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,phase:False})
+            patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,phase:False,keep_prob:1.})
         elif network == "CNN":
             patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,keep_prob: 1.})
         #print(patch_recover)
