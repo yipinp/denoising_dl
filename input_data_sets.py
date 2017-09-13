@@ -431,7 +431,13 @@ def conv2d(x, W, b, strides=1):
     # Conv2D wrapper, with bias and relu activation
     x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
     x = tf.nn.bias_add(x, b)
+    return tf.tanh(x)
     return tf.nn.relu(x)
+    
+    
+def norm(name, l_input, lsize=4):
+    return tf.nn.lrn(l_input, lsize, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name=name)
+
 
 def conv2d_batch(x, W, b,phase,strides=1):
     # Conv2D wrapper, with bias and relu activation
@@ -440,7 +446,8 @@ def conv2d_batch(x, W, b,phase,strides=1):
     x = tf.contrib.layers.batch_norm(x, 
                                      center=True, scale=True, 
                                      is_training=phase
-                                     )
+                                   )
+    return tf.tanh(x)
     return tf.nn.relu(x)
     
 def maxpool2d(x, k=2):
@@ -448,7 +455,10 @@ def maxpool2d(x, k=2):
     return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],
                           padding='SAME')
 
-
+def max_pool(name, l_input, k):
+    return tf.nn.max_pool(l_input, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME', name=name)
+    
+    
 # Create model
 def conv_net(x, weights, biases, dropout):
     # Reshape input picture
@@ -502,13 +512,51 @@ def conv_net_batch(x, weights, biases,phase):
                                        is_training=phase
                                      )
     fc1 = tf.reshape(fc1, [-1, weights['out'].get_shape().as_list()[0]])
-    fc1 = tf.nn.relu(fc1)
-    
+    #fc1 = tf.nn.relu(fc1)
+    fc1 = tf.tanh(fc1)
     fc1 = tf.nn.dropout(fc1, dropout)
     # Output, class prediction
     out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
     return out
 
+
+def alex_net(_X, _weights, _biases, _dropout):
+    _X = tf.reshape(_X, shape=[-1, 28, 28, 1])
+    conv1 = conv2d(_X, _weights['wc1'], _biases['bc1'])
+    pool1 = max_pool('pool1', conv1, k=2)
+    # 归一化层
+    norm1 = norm('norm1', pool1, lsize=4)
+    # Dropout
+    norm1 = tf.nn.dropout(norm1, _dropout)
+
+    # 卷积
+    conv2 = conv2d( norm1, _weights['wc2'], _biases['bc2'])
+    # 下采样
+    pool2 = max_pool('pool2', conv2, k=2)
+    # 归一化
+    norm2 = norm('norm2', pool2, lsize=4)
+    # Dropout
+    norm2 = tf.nn.dropout(norm2, _dropout)
+
+    # 卷积
+    conv3 = conv2d(norm2, _weights['wc3'], _biases['bc3'])
+    # 下采样
+    pool3 = max_pool('pool3', conv3, k=2)
+    # 归一化
+    norm3 = norm('norm3', pool3, lsize=4)
+    # Dropout
+    norm3 = tf.nn.dropout(norm3, _dropout)
+
+    # 全连接层，先把特征图转为向量
+    dense1 = tf.reshape(norm3, [-1, _weights['wd1'].get_shape().as_list()[0]]) 
+    dense1 = tf.nn.relu(tf.matmul(dense1, _weights['wd1']) + _biases['bd1'], name='fc1') 
+    # 全连接层
+    dense2 = tf.nn.relu(tf.matmul(dense1, _weights['wd2']) + _biases['bd2'], name='fc2') # Relu activation
+
+    # 网络输出层
+    out = tf.matmul(dense2, _weights['out']) + _biases['out']
+    return out
+    
        
 """
         User defined parameter
@@ -574,9 +622,9 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 30
 learning_ratio = 1.0
-training_epochs = 300
+training_epochs = 50
 batch_size = 128
-num_examples = 2000
+num_examples = 6000
 display_step = 1
 threshold_adjust = 0.90
 early_termination_threshold = 1/100000
@@ -590,7 +638,7 @@ learning_rate_threshold = 0.001 #not below the value for learning rate
 channel = 1
 save_step = 20
 prev_cost = 0
-network = "CNNBATCH"
+network = "ALEXNET"
 
 #patch parameters
 
@@ -706,9 +754,28 @@ elif network == "CNNBATCH1": #no good weight optimization with batch normalizati
         'b3': tf.Variable(tf.ones([1024]))
      }
 
+elif network == "ALEXNET":
+    patch_size = (28,28)
+    n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28) 
+    weights = {
+     'wc1': tf.Variable(tf.random_normal([3, 3, 1, 64])),
+     'wc2': tf.Variable(tf.random_normal([3, 3, 64, 128])),
+     'wc3': tf.Variable(tf.random_normal([3, 3, 128, 256])),
+     'wd1': tf.Variable(tf.random_normal([4*4*256, 1024])),
+     'wd2': tf.Variable(tf.random_normal([1024, 1024])),
+     'out': tf.Variable(tf.random_normal([1024, n_output]))
+    }
+    biases = {
+     'bc1': tf.Variable(tf.random_normal([64])),
+     'bc2': tf.Variable(tf.random_normal([128])),
+     'bc3': tf.Variable(tf.random_normal([256])),
+     'bd1': tf.Variable(tf.random_normal([1024])),
+     'bd2': tf.Variable(tf.random_normal([1024])),
+     'out': tf.Variable(tf.random_normal([n_output]))
+    }
 
 #Vriable defines which can be save/restore by saver
-learning_rate = tf.Variable(0.01,dtype="float",name="learning_rate")
+learning_rate = tf.Variable(0.001,dtype="float",name="learning_rate")
     
 seed = time.time()
 print("random seed is :", seed)
@@ -741,6 +808,8 @@ elif network == "CNN":
     pred = conv_net(x, weights, biases, keep_prob)
 elif network == "CNNBATCH" or network == "CNNBATCH1":
     pred = conv_net_batch(x, weights, biases,phase)
+elif network == "ALEXNET":
+    pred = alex_net(x, weights, biases, keep_prob)
     
 # Define loss and optimizer
 cost = tf.nn.l2_loss(pred-y)
@@ -798,11 +867,11 @@ if training_mode != "test_only":
                 if batch_y is None:
                     break
                 # Run optimization op (backprop) and cost op (to get loss value)
-                if network == "MLP" or network == "CNNBATCH" or network == "CNNBATCH1":
+                if network == "MLP" or network == "CNNBATCH" or network == "CNNBATCH1" :
                     _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y,phase:True,keep_prob:dropout
                                                           })
-                elif network == "CNN":
+                elif network == "CNN"  or network == "ALEXNET":
                     _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y,keep_prob:dropout
                                                           })                   
@@ -858,7 +927,7 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         batch_x,batch_y,p0,p1,patch_num= get_patches_one_image(test_image)
         if network == "MLP" or network == "CNNBATCH":
             patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,phase:False,keep_prob:1.})
-        elif network == "CNN":
+        elif network == "CNN" or network=="ALEXNET":
             patch_recover,cost_test = sess.run([pred,cost],{x:batch_x,y:batch_y,keep_prob: 1.})
         #print(patch_recover)
         print("Test phase: cost = ", cost_test/patch_num)
