@@ -622,16 +622,16 @@ current_image_true = None
 tf.reset_default_graph()
 learning_period = 30
 learning_ratio = 1.0
-training_epochs = 50
+training_epochs = 100
 batch_size = 128
 num_examples = 6000
 display_step = 1
 threshold_adjust = 0.90
 early_termination_threshold = 1/100000
-mode = 0 #mean,stddev, 1: min,max
+mode = 1 #mean,stddev, 1: min,max
 #continuous traing or training from scatch
 #training_mode = "test_only" # continuous,test_only
-training_mode = "continuou"
+training_mode = "continuous"
 reset_learning_rate_enable = 0
 reset_learning_rate = 0.00001  #when rerun the epoch, if need to reset the learning rate
 learning_rate_threshold = 0.001 #not below the value for learning rate
@@ -756,7 +756,26 @@ elif network == "CNNBATCH1": #no good weight optimization with batch normalizati
 
 elif network == "ALEXNET":
     patch_size = (28,28)
+    patch_stride = 14
+    n_input = patch_size[0]*patch_size[1] # MNIST data input (img shape: 28*28)
     n_output = patch_size[0]*patch_size[1] # denoised patch size (img shape: 28*28) 
+    dropout = 0.5 # Dropout, probability to keep units
+    W_init = tf.contrib.layers.xavier_initializer_conv2d()  
+    
+    weights = {
+        # 5x5 conv, 1 input, 32 outputs
+        'wc1': tf.get_variable('wc1', [3, 3, 1, 64], initializer=W_init),
+        # 5x5 conv, 32 inputs, 64 outputs
+        'wc2': tf.get_variable('wc2', [3, 3, 64, 128], initializer=W_init),
+        # fully connected, 7*7*64 inputs, 1024 outputs
+        'wc3': tf.get_variable('wc3', [3, 3, 128, 256], initializer=W_init),
+        'wd1': tf.get_variable('wd1', [4*4*256, 1024], initializer=W_init),
+        'wd2': tf.get_variable('wd2', [1024, 1024], initializer=W_init),
+        # 1024 inputs, 10 outputs (class prediction)
+        'out': tf.get_variable('out', [1024, n_output], initializer=W_init)
+     }
+
+    """
     weights = {
      'wc1': tf.Variable(tf.random_normal([3, 3, 1, 64])),
      'wc2': tf.Variable(tf.random_normal([3, 3, 64, 128])),
@@ -765,6 +784,7 @@ elif network == "ALEXNET":
      'wd2': tf.Variable(tf.random_normal([1024, 1024])),
      'out': tf.Variable(tf.random_normal([1024, n_output]))
     }
+    """
     biases = {
      'bc1': tf.Variable(tf.random_normal([64])),
      'bc2': tf.Variable(tf.random_normal([128])),
@@ -773,6 +793,7 @@ elif network == "ALEXNET":
      'bd2': tf.Variable(tf.random_normal([1024])),
      'out': tf.Variable(tf.random_normal([n_output]))
     }
+    
 
 #Vriable defines which can be save/restore by saver
 learning_rate = tf.Variable(0.001,dtype="float",name="learning_rate")
@@ -874,17 +895,17 @@ if training_mode != "test_only":
                 elif network == "CNN"  or network == "ALEXNET":
                     _, c,summary = sess.run([optimizer,cost,merged_summary_op], feed_dict={x: batch_x,
                                                           y: batch_y,keep_prob:dropout
-                                                          })                   
-                    
+                                                          })                    
+                
                #image_recovery(image_size[0],image_size[1],patch_size[0],patch_size[1],patch_stride,batch_y)
                # Compute average loss
-                summary_writer.add_summary(summary,epoch*total_batch+i)
-                avg_cost += c/num_examples
+                summary_writer.add_summary(summary,epoch*total_batch+i)                
+                avg_cost += c/num_examples   
                 # Display logs per epoch step
             if epoch % learning_period == 0:
                 print("current learning rate is :",sess.run(learning_rate))
                 prev_cost = avg_cost
-      
+            """    
             if avg_cost > prev_cost*threshold_adjust  and epoch % learning_period == learning_period - 1:
                  if abs(prev_cost - avg_cost) < early_termination_threshold*prev_cost:
                      print("Early termination!",prev_cost,avg_cost)
@@ -892,7 +913,7 @@ if training_mode != "test_only":
                  if sess.run(learning_rate) > learning_rate_threshold :
                      sess.run(tf.assign(learning_rate,learning_rate *learning_ratio))
                      print("Adjust learning rate to ",sess.run(learning_rate))
-            
+            """            
             if epoch % display_step == 0:
                 print("Epoch:", '%04d' % (epoch+1), "cost=", \
                     "{:.9f}".format(avg_cost),",weight_out:",sess.run(tf.nn.moments(tf.reshape(weights['out'],[-1]),axes=[0])),",bias out:",sess.run(tf.nn.moments(tf.reshape(biases['out'],[-1]),axes=[0])))
