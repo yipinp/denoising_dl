@@ -31,13 +31,16 @@ def GaussianWhiteNoiseForGray(imgIn):
 
   
 #generate one batch data sets based on directory
-def generate_data_sets(directory,target_size,batch_size,shuffle_enable):
+def generate_data_sets(directory,target_size,batch_size,shuffle_enable,phase):
     #scan directory and get the images
     x_datagen = ImageDataGenerator();
     y_datagen = ImageDataGenerator(preprocessing_function= GaussianWhiteNoiseForGray);
-    train_x_generator = x_datagen.flow_from_directory(directory,target_size,batch_size = batch_size,shuffle=shuffle_enable,class_mode=None) 
-    train_y_generator = y_datagen.flow_from_directory(directory,target_size,batch_size = batch_size,shuffle=shuffle_enable,class_mode=None) 
-          
+    if phase == "TRAIN":
+        train_x_generator = x_datagen.flow_from_directory(directory,target_size,batch_size = batch_size,shuffle=shuffle_enable,class_mode=None) 
+        train_y_generator = y_datagen.flow_from_directory(directory,target_size,batch_size = batch_size,shuffle=shuffle_enable,class_mode=None) 
+        train_generator = zip(train_x_generator,train_y_generator)  
+    else :
+        test_x_generator = x_datagen.flow_from_directory(directory,target_size,batch_size = batch_size,shuffle=shuffle_enable,class_mode=None) 
 
 
 
